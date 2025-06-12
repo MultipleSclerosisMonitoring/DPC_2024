@@ -1,0 +1,304 @@
+# Internationalization para msGait app.
+# Copyright (C) YEAR THE PACKAGE'S COPYRIGHT HOLDER
+# This file is distributed under the same license as the PACKAGE package.
+# FIRST AUTHOR <EMAIL@ADDRESS>, YEAR.
+#
+#, fuzzy
+msgid ""
+msgstr ""
+"Project-Id-Version: 0.1.0\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2025-04-22 00:02+0200\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"Last-Translator: JOAQUIN ORDIERES <j.ordieres@upm.es>\n"
+"Language-Team: LANGUAGE <LL@li.org>\n"
+"Language: en\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+
+#: ms_monitoring/find_activity.py:24
+msgid "ARG_TIT_FIND_GAIT"
+msgstr "Parametros para la aplicaicón msGait."
+
+#: ms_monitoring/find_activity.py:26
+#, fuzzy
+msgid "ARG_LIST_ACT_ALL_IDS"
+msgstr "Lista de IDs para la tabla activity_all de PostgreSQL."
+
+#: ms_monitoring/find_activity.py:28
+msgid "ARG_STR_PATH_YAML"
+msgstr "Trayectoria al fichero de configuración CONFIG.YAML."
+
+#: ms_monitoring/find_activity.py:29
+msgid "ARG_STR_LNG"
+msgstr "Idioma: [en|es]"
+
+#: ms_monitoring/find_activity.py:30
+msgid "ARG-STR-FOUT-XLSX"
+msgstr "Camino al Fichero excel para almacenar los datos extraidos."
+
+#: ms_monitoring/find_activity.py:32
+msgid "ARG_VB_LEVEL"
+msgstr "Nivel de Verbosidad [0:Nada|1:Básico|2:Detallado]"
+
+#: ms_monitoring/find_activity.py:41
+msgid "PRCS_LIST_ACT_ALL_IDS"
+msgstr "Lista de IDs para la tabla activity_all de PostgreSQL."
+
+#: ms_monitoring/find_activity.py:54
+msgid "FGAIT_PGSQL_ERR"
+msgstr "Error al obtener ventanas de actividad: {e}"
+
+#: ms_monitoring/find_activity.py:58
+msgid "FGAIT_NO_WINS"
+msgstr "No se encontraron ventanas de actividad."
+
+#: ms_monitoring/find_activity.py:68
+msgid "FGAIT_1ST"
+msgstr "Detectando marchas efectivas..."
+
+#: ms_monitoring/find_activity.py:73
+msgid "FGAIT_NO_WALK"
+msgstr "No se detectó marcha efectiva en este rango."
+
+#: ms_monitoring/find_activity.py:77
+#, fuzzy
+msgid "FGAIT_WKLS_FND"
+msgstr "Primeras marchas detectadas:"
+
+#: ms_monitoring/find_activity.py:84
+msgid "FGAIT_NUM_WALKS"
+msgstr "Marchas efectivas guardadas: {ns}."
+
+#: ms_monitoring/find_activity.py:85
+msgid "FGAIT_END"
+msgstr "Proceso finalizado correctamente."
+
+#: ms_monitoring/find_mscodeids.py:26
+msgid "Find msCodeIDs and store activity windows into PostgreSQL."
+msgstr "Buscar msCodeIDs y almacenar ventanas de actividad en PostgreSQL."
+
+#: ms_monitoring/find_mscodeids.py:28
+msgid "Start datetime (format: 'YYYY-MM-DD HH:MM:SS')."
+msgstr "Fecha de comienzo (formato: 'YYYY-MM-DD HH:MM:SS')."
+
+#: ms_monitoring/find_mscodeids.py:30
+msgid "End datetime (format: 'YYYY-MM-DD HH:MM:SS')."
+msgstr "Fecha de finalización (formato: 'YYYY-MM-DD HH:MM:SS')."
+
+#: ms_monitoring/find_mscodeids.py:32
+msgid "Path to the configuration file (config.yaml)."
+msgstr "Camino al fichero de configuración (config.yaml)."
+
+#: ms_monitoring/find_mscodeids.py:34
+msgid "Verbosity level (0=Silent, 1=Basic, 2=Detailed)."
+msgstr "Nivel de Verbosidad (0=Silencio, 1=Básico, 2=Detallado)."
+
+#: ms_monitoring/find_mscodeids.py:44
+msgid "Creating/verifying necessary tables..."
+msgstr "Creando/verificando tablas necesarias ..."
+
+#: ms_monitoring/find_mscodeids.py:49
+msgid "Tables verified and created if necessary."
+msgstr "Tablas verificadas y creadas si es preciso."
+
+#: ms_monitoring/find_mscodeids.py:51
+#, fuzzy
+msgid "Error verifying/creating tables: "
+msgstr "Error verificando/creando tablas:"
+
+#: ms_monitoring/find_mscodeids.py:76
+#, python-brace-format
+msgid "Error: End date ({end}) is before start date ({start})."
+msgstr "Error: Fecha Fin ({end}) es anterior a la Fecha de Comienzo ({start})."
+
+#: ms_monitoring/find_mscodeids.py:81
+#, python-brace-format
+msgid "Getting msCodeIDs from {start} to {end}..."
+msgstr "Obteniendo msCodeIDs desde {start} hasta {end}..."
+
+#: ms_monitoring/find_mscodeids.py:91
+msgid "No CodeIDs found."
+msgstr "CodeIDs no encontrados."
+
+#: ms_monitoring/find_mscodeids.py:95
+#, python-brace-format
+msgid "Found {n} different CodeIDs from {start} to {end}."
+msgstr "Encontrados {n} CodeIDs difernetes desde {start} hasta {end}."
+
+#: ms_monitoring/find_mscodeids.py:101
+#, python-brace-format
+msgid "Processing data for CodeID: {codeid}..."
+msgstr "Procesando datos para CodeID: {codeid}..."
+
+#: ms_monitoring/find_mscodeids.py:107
+#, python-brace-format
+msgid "CodeID {codeid} stored with ID {id}."
+msgstr "CodeID {codeid} almacenado con ID {id}."
+
+#: ms_monitoring/find_mscodeids.py:109
+#, python-brace-format
+msgid "Error storing CodeID {codeid}: {error}"
+msgstr "Error almacenando CodeID {codeid}: {error}"
+
+#: ms_monitoring/find_mscodeids.py:117
+#, python-brace-format
+msgid "Error fetching data for CodeID {codeid}: {error}"
+msgstr "Error recuperando datos para CodeID {codeid}: {error}"
+
+#: ms_monitoring/find_mscodeids.py:122
+#, python-brace-format
+msgid "No data found for CodeID: {codeid}."
+msgstr "Datos no encontrados para CodeID: {codeid}."
+
+#: ms_monitoring/find_mscodeids.py:127
+#, python-brace-format
+msgid ""
+"Foot field not found in sensor data for CodeID: {codeid}. Dataset size: "
+"{size}"
+msgstr "Campo Pie no encontrado en los datos del sensor CodeID: {codeid}. Tamaño de datos: {size}"
+
+#: ms_monitoring/find_mscodeids.py:140
+#, python-brace-format
+msgid "No activity segments identified for CodeID: {codeid}, foot: Left."
+msgstr "No se han identificado segmentos de actividad para CodeID: {codeid}, pie: Izdo."
+
+#: ms_monitoring/find_mscodeids.py:146
+#, python-brace-format
+msgid "No activity segments identified for CodeID: {codeid}, foot: Right."
+msgstr "No se han identificado segmentos de actividad para CodeID: {codeid}, pie: Decho."
+
+#: ms_monitoring/find_mscodeids.py:154 ms_monitoring/find_mscodeids.py:161
+#, python-brace-format
+msgid "Activity segments processed and stored ({n} rows):"
+msgstr "Segmentos de actividad procesados y alamcenados ({n} filas):"
+
+#: ms_monitoring/find_mscodeids.py:172
+#, python-brace-format
+msgid "Final merged segments stored ({n} rows):"
+msgstr "Segmentos integrados y almacenados ({n} filas):"
+
+#: ms_monitoring/find_mscodeids.py:175
+#, python-brace-format
+msgid "Error processing activity segments for CodeID {codeid}: {error}"
+msgstr "Error procesando segmentos de actividad para CodeID {codeid}: {error}"
+
+#: ms_monitoring/find_mscodeids.py:179
+msgid "All CodeIDs processed successfully."
+msgstr "Todos los CodeIDs han sido procesados satisfactoriamente."
+
+#: msTools/data_manager.py:81
+msgid "PGSQL-CONN-ERR"
+msgstr "Error al conectar con PostgreSQL: {e}"
+
+#: msTools/data_manager.py:130
+msgid "PGSQL-TAB-ERR"
+msgstr "Error al verificar/crear tablas: {e}"
+
+#: msTools/data_manager.py:166
+msgid "INFL-QRY-COD-ERR"
+msgstr "Error al obtener CodeIDs de InfluxDB: {e}"
+
+#: msTools/data_manager.py:185 msGait/movement_detector.py:29
+msgid "PGSQL-QRY-GEN-ERR"
+msgstr "Error al ejecutar la consulta SQL: {e}"
+
+#: msTools/data_manager.py:200
+msgid "VB_REG_ACT_ALL"
+msgstr "   Procesando registro {row} de activity_all."
+
+#: msTools/data_manager.py:211
+msgid "VB-ACT-ALL-LEGS"
+msgstr "\t{ns} registros producidos para los pies."
+
+#: msTools/data_manager.py:242
+msgid "PGSQL-VAL-COD-ERR"
+msgstr "Error de validación al almacenar CodeID: {e}"
+
+#: msTools/data_manager.py:246
+msgid "PGSQL-INS-COD-ERR"
+msgstr "Error al almacenar CodeID: {e}"
+
+#: msTools/data_manager.py:292 msGait/movement_detector.py:155
+msgid "PGSQL-INS-TAB-NOD-ERR"
+msgstr "No hay datos para guardar en {table_name}."
+
+#: msTools/data_manager.py:296
+msgid "PGSQL-INS-TAB-INFO"
+msgstr "Guardando datos en la tabla {table_name}..."
+
+#: msTools/data_manager.py:339
+msgid "PGSQL-INS-TAB-OK"
+msgstr "Datos guardados correctamente en la tabla {table_name}."
+
+#: msTools/data_manager.py:342
+msgid "PGSQL-VAL-TAB-ERR"
+msgstr "Error de validación en {table_name}: {e}"
+
+#: msTools/data_manager.py:345 msGait/movement_detector.py:161
+msgid "PGSQL-INS-TAB-ERR"
+msgstr "Error al guardar los datos en {table_name}: {e}"
+
+#: msTools/data_manager.py:366
+msgid "PGSQL-QRY-COD-ERR"
+msgstr "Error al obtener el verdadero CodeID: {e}"
+
+#: msGait/movement_detector.py:58
+msgid "INFL-QRY-DATA-ERR"
+msgstr "Error al obtener CodeIDs de InfluxDB: {e}"
+
+#: msGait/movement_detector.py:67
+msgid "MVDET-AG-NODAT"
+msgstr "Faltan datos necesarios para calcular |a| y |g|."
+
+#: msGait/movement_detector.py:87
+msgid "MVNT-ROOT-MISS"
+msgstr "Falta la columna 'foot' en activity_windows."
+
+#: msGait/movement_detector.py:99
+msgid "MVNT-TS-NOV"
+msgstr "Ignorando TimeStamps inválidos: {row}"
+
+#: msGait/movement_detector.py:107
+msgid "MVNT-QRY-DAT"
+msgstr "Procesando registros con CodeID: {cid} Desde: {frm}. Duración:{dur}."
+
+#: msGait/movement_detector.py:117
+msgid "MVNT-XLSX-DAT"
+msgstr "Procesando excel hoja:{shn} en {file}."
+
+#: msGait/movement_detector.py:123
+msgid "MVNT-QRY-REC"
+msgstr "Número de registros recuperados: {ns}"
+
+#: msGait/movement_detector.py:142
+msgid "MVNT-WLK-FOOT"
+msgstr "Marcha detectada: ID={codeid_id}, Foot={foot}, Duracion={dur}"
+
+#: msGait/movement_detector.py:150
+msgid "MVNT-VAL-EFF-ERR"
+msgstr "Error de validación en detect_effective_movement: {e}"
+
+msgid "MVDET-ACT-I"
+msgstr "Procesando registros con CodeID: {cid} Desde: {frm}. Duración:{dur}."
+
+#: ms_monitoring/find_activity.py
+msgid "ARG_STR_TIME_FROM"
+msgstr "Fecha y hora de inicio de la ventana (YYYY-MM-DD HH:MM:SS)"
+
+#: ms_monitoring/find_activity.py
+msgid "ARG_STR_TIME_UNTIL"
+msgstr "Fecha y hora de fin de la ventana (YYYY-MM-DD HH:MM:SS)"
+
+#: ms_monitoring/find_activity.py
+msgid "ERR_MUST_SPECIFY_IDS_OR_TIME_WINDOW"
+msgstr "Debe especificar bien la lista de IDs (-i) o la ventana de tiempo (-f y -u)."
+
+#: ms_monitoring/find_activity.py
+msgid "PRCS_TIME_WINDOW"
+msgstr "Procesando ventana desde {f} hasta {u}..."
+
+#: ms_monitoring/find_activity.py
+msgid "ERR_QUERY_ACTIVITY_ALL"
+msgstr "Error al consultar activity_all: {e}"

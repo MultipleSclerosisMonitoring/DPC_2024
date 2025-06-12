@@ -1,0 +1,32 @@
+[project]
+name = "ms_monitoring"
+version = "0.1.0"
+description = "Basic Processing Wearable Sensoria + HealthyWear"
+authors = [
+    { name = "Diego Parrilla Calderon", email = "diego.parrilla.calderon@alumnos.upm.es" }
+]
+readme = "README.md"
+keywords = ["SclerosisMonitoring", "msTools", "python", "msCodeID"]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent"
+]
+dynamic = ["version", "description", "readme", "keywords", "classifiers"]
+
+requires-python = ">=3.12,<4.0"
+
+dependencies = [
+    "pandas >= 2.0.0",
+    "psycopg2 >= 2.9.5",
+    "influxdb-client >= 1.35.0",
+    "PyYAML >= 6.0.1",
+]
+
+[tool.poetry]
+packages = [{include = "ms_monitoring"}]
+include = ["msTools/*", "msCodeID/*", "msGait/*"]
+
+[project.urls]
+homepage = "https://github.com/MultipleSclerosisMonitoring/DPC_2024"
+issues = "https://github.com/MultipleSclerosisMonitoring/DPC_2024/issues"

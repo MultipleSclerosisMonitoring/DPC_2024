@@ -1,0 +1,23 @@
+influxdb:
+  org: 'UPM'
+  bucket: 'Gait/autogen'
+  measurement: 'Gait'
+  url: "https://apiivm78.etsii.upm.es:8086"
+  token: 'Zx2jR8PD6h3YlS7HVsY5Han1SzF_iz7uk8n5z9BYRZ5q50lk8r1L18N-nFZiGCa57oowLgl8656pVpCig-GANg=='
+  verify: false
+  timeout: 900000
+
+postgresql:
+  host: "apiivm78.etsii.upm.es"
+  user: "dpc"
+  password: "UPM#2024"
+  database: "sclerosis_dpc_2024"
+  port: 5432
+
+movement:
+  accel_threshold: 0.1  # Umbral para el módulo de aceleración
+  gyro_threshold: 0.1   # Umbral para el módulo de giroscopio
+  power_threshold: 0.5  # Threshold for the power spectra
+  freq_band_min: 0.5    # Min of Freq Band
+  freq_band_max: 2.0    # Max of Freq Band
+  min_continuous_seconds: 10

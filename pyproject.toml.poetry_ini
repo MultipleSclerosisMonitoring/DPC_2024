@@ -1,0 +1,29 @@
+[tool.poetry]
+name = "ms_monitoring"
+version = "0.1.0"
+description = "Basic Processing Wearable Sensoria + HealthyWear"
+authors = ["Diego Parrilla Calderon <diego.parrilla.calderon@alumnos.upm.es>"]
+readme = "README.md"
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+]
+keywords = ["SclerosisMonitoring", "msTools", "python","msCodeID"]
+packages = [{include = "ms_monitoring"}]
+include = ["msTools/*", "msCodeID/*"]
+
+[tool.poetry.dependencies]
+python = "^3.10"  # Reemplaza con tu versión de Python
+pandas = "^2.0.0"  # Reemplaza con la versión que necesitas
+psycopg2 = "^2.9.5"
+influxdb_client = "^1.35.0"
+PyYAML = "^6.0.1"
+# polars = "^0.17.14"
+
+# [tool.poetry]
+# include = ["msTools/*", "msCodeID/*","msGait/*"]
+
+[tool.poetry.urls]
+Homepage = "https://github.com/MultipleSclerosisMonitoring/DPC_2024"
+Issues = "https://github.com/MultipleSclerosisMonitoring/DPC_2024/Issues"

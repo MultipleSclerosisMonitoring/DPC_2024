@@ -1,0 +1,40 @@
+[build-system]
+# Minimum requirements for the build system to execute.
+requires = ["setuptools","wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "multiplesclerosismonitoring"
+version = "0.1.0"
+#authors = [
+#  { name="Example Author", email="author@example.com" },
+#]
+description = "Basic Processing Wearable Sensoria + HealthyWear"
+readme = "README.md"
+requires-python = ">=3.10"
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+]
+keywords = ["SclerosisMonitoring", "msTools", "python","msCodeID"]
+
+dependencies = [
+   "pandas",
+   "psycopg2",
+   "influxdb_client",
+   "PyYAML",
+   # "polars"
+]
+
+[project.urls]
+Homepage = "https://github.com/MultipleSclerosisMonitoring/DPC_2024"
+Issues = "https://github.com/MultipleSclerosisMonitoring/DPC_2024/Issues"
+
+# See https://setuptools.pypa.io/en/latest/userguide/pyproject_config.html#setuptools-specific-configuration
+[tool.setuptools.packages.find]
+include = ["msTools*","msCodeID*"]
+
+[tool.setuptools.package-data]
+Tools = ["*"]
+CodeID = ["*"]
