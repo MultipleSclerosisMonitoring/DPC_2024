@@ -15,9 +15,14 @@ postgresql:
   port: 5432
 
 movement:
-  accel_threshold: 0.1  # Umbral para el módulo de aceleración
-  gyro_threshold: 0.1   # Umbral para el módulo de giroscopio
-  power_threshold: 0.5  # Threshold for the power spectra
-  freq_band_min: 0.5    # Min of Freq Band
-  freq_band_max: 2.0    # Max of Freq Band
+  # Umbral para el módulo de aceleración (is_effective_by_time)
+  accel_threshold: 0.2
+  # Umbral para el módulo de giroscopio (is_effective_by_time)
+  gyro_threshold: 0.2
+  # Threshold de potencia en la banda de frecuencia
+  power_threshold: 0.5
+  # Banda de frecuencia para Welch (Hz)
+  freq_band_min: 0.4
+  freq_band_max: 1.4
+  # Segundos mínimos continuos sobre el umbral para considerar actividad
   min_continuous_seconds: 10

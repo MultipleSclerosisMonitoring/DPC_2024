@@ -30,8 +30,7 @@
                 "-o","./outs/datos-walk.xlsx",
             ],
             "console": "integratedTerminal",
-            "cwd": "/home/jordieres/soft/sclerosis/DPC_2024/"
-            // "cwd": "${workspaceFolder}/src"
+            "cwd": "${workspaceFolder}/"
         },
     ]
 }

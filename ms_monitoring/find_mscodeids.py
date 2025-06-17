@@ -5,12 +5,8 @@ from msCodeID.codeid_processor import CodeIDProcessor
 from datetime import datetime, timedelta
 import gettext
 import os
-
-# Configurar localización
-localedir = os.path.join(os.path.abspath(os.path.dirname(__file__)), 'locales')
-lang = gettext.translation('messages', localedir=localedir, languages=['es'], fallback=True)
-lang.install()
-_ = lang.gettext
+import sys
+from msTools.timeutils import ensure_utc
 
 class VAction(argparse.Action):
     """
@@ -23,7 +19,26 @@ class VAction(argparse.Action):
             setattr(namespace, self.dest, int(values))
 
 def main():
-    parser = argparse.ArgumentParser(description=_("Find msCodeIDs and store activity windows into PostgreSQL."))
+    # 1) Pre-parse para capturar sólo -l/--lang (sin generar help aún)
+    pre = argparse.ArgumentParser(add_help=False)
+    pre.add_argument("-l", "--lang", dest="lng", type=str, default="es",
+                     help="Language: [en|es]")
+    pre_args, remaining = pre.parse_known_args()
+
+    # 2) Inicializar la traducción con el idioma elegido
+    localedir = os.path.join(os.path.abspath(os.path.dirname(__file__)), 'locales')
+    lang_trans = gettext.translation('messages', localedir=localedir,
+                                     languages=[pre_args.lng], fallback=True)
+    lang_trans.install()
+    _ = lang_trans.gettext
+
+    # 3) Ahora sí creamos el parser completo ya traducido
+    parser = argparse.ArgumentParser(
+        description=_("Find msCodeIDs and store activity windows into PostgreSQL.")
+    )
+    # Volvemos a exponer -l/--lang para que el usuario pueda verlo en --help
+    parser.add_argument("-l", "--lang", dest="lng", type=str, default=pre_args.lng,
+                        help=_("Language: [en|es]"))
     parser.add_argument("-f", "--from", dest="from_date", type=str, required=False,
                         help=_("Start datetime (format: 'YYYY-MM-DD HH:MM:SS')."))
     parser.add_argument("-u", "--until", dest="until_date", type=str, required=False,
@@ -32,8 +47,17 @@ def main():
                         help=_("Path to the configuration file (config.yaml)."))
     parser.add_argument("-v", "--verbose", action=VAction, nargs="?", default=0, const=1,
                         help=_("Verbosity level (0=Silent, 1=Basic, 2=Detailed)."))
-    
-    args = parser.parse_args()
+    parser.add_argument("--head-rows", dest="head_rows", type=int, default=5,
+                        help=_("ARG_HEAD_ROWS"))
+
+    args = parser.parse_args(remaining)
+
+    # Si el usuario cambia -l en la 2ª fase, re-iniciar traducción:
+    if args.lng != pre_args.lng:
+        lang_trans = gettext.translation('messages', localedir=localedir,
+                                         languages=[args.lng], fallback=True)
+        lang_trans.install()
+        _ = lang_trans.gettext
 
     # Inicialización del DataManager y CodeIDProcessor
     data_manager = DataManager(config_path=args.config_file)
@@ -51,36 +75,35 @@ def main():
         print(_("Error verifying/creating tables: ") + str(e))
         return
 
-    # Gestión de fechas
+    # Gestión de fechas usando ensure_utc()
     if args.from_date:
-        start_datetime = pd.to_datetime(args.from_date)
-        if start_datetime.tzinfo is None:
-            start_datetime = start_datetime.tz_localize("UTC")
+        start_datetime = ensure_utc(args.from_date)
     else:
-        start_datetime = datetime.now() - timedelta(days=1)
-        start_datetime = pd.to_datetime(start_datetime.replace(hour=0, \
-                            minute=0, second=0, microsecond=0))
-        if start_datetime.tzinfo is None:
-            start_datetime = start_datetime.tz_localize("UTC")
+        tmp = datetime.now() - timedelta(days=1)
+        tmp = tmp.replace(hour=0, minute=0, second=0, microsecond=0)
+        start_datetime = ensure_utc(tmp)
 
     if args.until_date:
-        end_datetime = pd.to_datetime(args.until_date)
-        if end_datetime.tzinfo is None:
-            end_datetime = end_datetime.tz_localize("UTC")
+        end_datetime = ensure_utc(args.until_date)
     else:
-        end_datetime = pd.to_datetime(datetime.now())
-        if end_datetime.tzinfo is None:
-            end_datetime = end_datetime.tz_localize("UTC")
+        end_datetime = ensure_utc(datetime.now())
 
     if end_datetime < start_datetime:
-        print(_("Error: End date ({end}) is before start date ({start}).").format(
-            end=end_datetime, start=start_datetime))
-        return None
+        # Mensaje de error en stderr y salida con código 1
+        sys.stderr.write(
+            _("Error: End date ({end}) is before start date ({start}).\n")
+            .format(end=end_datetime, start=start_datetime)
+        )
+        sys.exit(1)
 
     if args.verbose >= 1:
-        print(_("Getting msCodeIDs from {start} to {end}...").format(
-            start=start_datetime.strftime('%Y-%m-%d %H:%M:%S'),
-            end=end_datetime.strftime('%Y-%m-%d %H:%M:%S')))
+        print(
+            _("Getting msCodeIDs from {start} to {end}...")
+            .format(
+                start=start_datetime.strftime('%Y-%m-%d %H:%M:%S'),
+                end=end_datetime.strftime('%Y-%m-%d %H:%M:%S')
+            )
+        )
     
     # Obtener CodeIDs en el rango de fechas
     codeids = data_manager.get_codeids_in_range(
@@ -111,8 +134,9 @@ def main():
 
         # Obtener datos del CodeID desde InfluxDB
         try:
-            sensor_data = codeid_processor.fetch_codeid_data(codeid, \
-                                start_datetime, end_datetime)
+            sensor_data = codeid_processor.fetch_codeid_data(
+                codeid, start_datetime, end_datetime
+                )
         except Exception as e:
             print(_("Error fetching data for CodeID {codeid}: {error}").format(codeid=codeid, error=str(e)))
             continue
@@ -122,11 +146,12 @@ def main():
                 print(_("No data found for CodeID: {codeid}.").format(codeid=codeid))
             continue
 
-        if 'Foot' not in sensor_data.columns:  # Accidentally one sensor was declared
-            if args.verbose >= 1:
-                print(_("Foot field not found in sensor data for CodeID: {codeid}. Dataset size: {size}").format(
-                    codeid=codeid, size=len(sensor_data)))
-            continue
+        # Robust foot‐column check: fail if it's missing
+        if 'Foot' not in sensor_data.columns:
+            sys.exit(
+                _("Critical error: 'Foot' field missing in sensor data for CodeID: {codeid}.")
+                .format(codeid=codeid)
+            )
         # Identificar segmentos de actividad distancia 80seg (almacena en 
         # fullref_sensor_codeid automáticamente)
         try:
@@ -152,14 +177,14 @@ def main():
                 activity_segL['codeleg_id'] = ids
                 if args.verbose >= 2:
                     print(_("Activity segments processed and stored ({n} rows):").format(n=len(activity_refL)))
-                    print(activity_segL.head())
+                    print(activity_segL.head(args.head_rows))
 
             if not activity_segR.empty:
                 ids = data_manager.store_data("activity_leg", activity_refR)
                 activity_segR['codeleg_id'] = ids
                 if args.verbose >= 2:
                     print(_("Activity segments processed and stored ({n} rows):").format(n=len(activity_refR)))
-                    print(activity_segR.head())
+                    print(activity_segR.head(args.head_rows))
 
             # Generamos la intersección de las dos piernas
             # Key aspect in hierarchical information structure
@@ -170,7 +195,7 @@ def main():
                 data_manager.store_data("activity_all",dbrg)
                 if args.verbose >= 2:
                     print(_("Final merged segments stored ({n} rows):").format(n=len(dbrg)))
-                    print(dbrg.head())
+                    print(dbrg.head(args.head_rows))
         except Exception as e:
             print(_("Error processing activity segments for CodeID {codeid}: {error}").format(
                 codeid=codeid, error=str(e)))

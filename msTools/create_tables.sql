@@ -3,7 +3,6 @@ CREATE TABLE IF NOT EXISTS codeids (
     codeid TEXT UNIQUE NOT NULL
 );
 
-
 CREATE TABLE IF NOT EXISTS effective_movement (
     id SERIAL PRIMARY KEY,
     codeid_id INT REFERENCES codeids(id),  -- Relación con codeids
@@ -56,3 +55,13 @@ CREATE TABLE IF NOT EXISTS fullref_sensor_codeid (
 CREATE INDEX IF NOT EXISTS idx_fullref_codeid ON fullref_sensor_codeid(codeid_id);
 CREATE INDEX IF NOT EXISTS idx_fullref_foot ON fullref_sensor_codeid(foot);
 CREATE INDEX IF NOT EXISTS idx_fullref_time ON fullref_sensor_codeid(start_time, end_time);
+
+-- Nueva tabla para periodos de marcha efectiva simultánea
+CREATE TABLE IF NOT EXISTS effective_gait (
+    id SERIAL PRIMARY KEY,
+    codeid_id INT REFERENCES codeids(id),
+    start_time TIMESTAMP WITH TIME ZONE NOT NULL,
+    end_time   TIMESTAMP WITH TIME ZONE NOT NULL,
+    duration   NUMERIC NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_effective_gait_codeid ON effective_gait(codeid_id);

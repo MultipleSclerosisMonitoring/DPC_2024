@@ -6,7 +6,7 @@ from msTools.models import CodeID, ActivityLeg, ActivityAll
 from msTools import i18n
 from msGait.models import EffectiveMovement, ActivitySegment
 from pydantic import ValidationError
-from typing import List, Dict
+from typing import List, Dict, Optional
 import datetime
 
 
@@ -185,6 +185,55 @@ class DataManager:
             print(i18n._("PGSQL-QRY-GEN-ERR").format(e=e))
             raise
 
+    def segments_retrieval(
+        self,
+        fstart: Optional[str] = None,
+        fend: Optional[str] = None,
+        ids: Optional[List[int]] = None,
+        verbose: int = 0
+    ) -> pd.DataFrame:
+        """
+        Recupera los registros de `activity_all`:
+        - Si se pasa `ids`, devuelve solo esos IDs.
+        - Si no, usa el rango de tiempo [fstart, fend].
+        :param fstart: fecha/hora inicio (si no se pasan ids)
+        :param fend:  fecha/hora fin   (si no se pasan ids)
+        :param ids:   lista de IDs de activity_all
+        :param verbose: nivel de verbosidad
+        :return: DataFrame con las columnas
+                 ['id','start_time','end_time','duration',
+                  'codeid_ids','codeleg_ids','active_legs']
+        """
+        if ids is not None:
+            if verbose >= 1:
+                print(f"[DataManager] Recuperando segmentos por IDs: {ids}")
+            ids_str = ", ".join(map(str, ids))
+            query = (
+                "SELECT id, start_time, end_time, duration, "
+                "codeid_ids, codeleg_ids, active_legs "
+                f"FROM activity_all WHERE id IN ({ids_str}) "
+                "ORDER BY codeid_ids;"
+            )
+        else:
+            if not fstart or not fend:
+                raise ValueError("Debe especificar `ids` o la ventana `fstart`/`fend`.")
+            if verbose >= 1:
+                print(f"[DataManager] Recuperando segmentos entre {fstart} y {fend}")
+            query = (
+                "SELECT id, start_time, end_time, duration, "
+                "codeid_ids, codeleg_ids, active_legs "
+                f"FROM activity_all "
+                f"WHERE start_time <= '{fend}' "
+                f"  AND end_time   >= '{fstart}' "
+                "ORDER BY codeid_ids;"
+            )
+
+        df = self.fetch_data(query)
+        if df.empty and verbose >= 1:
+            print("[DataManager] No se encontraron segmentos.")
+        return df
+
+
     def recover_activity_all(self, act: pd.DataFrame, vb: int = 0) -> pd.DataFrame:
         """
         To complete the act DataFrame with the CodeID.
@@ -321,6 +370,10 @@ class DataManager:
 
                 elif table_name == "fullref_sensor_codeid":
                     validated_rows.append(ActivitySegment(**row.to_dict()).dict())
+                    
+                elif table_name == "effective_gait":
+                    # No validamos con pydantic; insertamos tal cual
+                    validated_rows.append(row.to_dict())
                 else:
                     raise ValueError(f"Tabla no reconocida: {table_name}")
 

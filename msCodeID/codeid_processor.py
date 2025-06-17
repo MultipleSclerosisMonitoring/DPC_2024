@@ -4,6 +4,7 @@ from pydantic import ValidationError
 from msTools.data_manager import DataManager
 from msTools.models import ActivityLeg, ActivityAll
 from msGait.models import ActivitySegment
+from msTools.timeutils import ensure_utc
 
 class CodeIDProcessor:
     def __init__(self, data_manager: DataManager):
@@ -30,22 +31,10 @@ class CodeIDProcessor:
         :return: DataFrame con los datos asociados.
         :rtype: pd.DataFrame
         """
-        # Verificar si las fechas ya tienen información de zona horaria
-        if start_datetime.tzinfo is None:
-            start_datetime = pd.to_datetime(start_datetime).tz_localize("UTC")
-        else:
-            start_datetime = pd.to_datetime(start_datetime).tz_convert("UTC")
+        # Estandarizamos a UTC con ensure_utc()
+        start_datetime = ensure_utc(start_datetime).isoformat().replace("+00:00", "Z")
+        end_datetime   = ensure_utc(end_datetime)  .isoformat().replace("+00:00", "Z")
 
-        if end_datetime.tzinfo is None:
-            end_datetime = pd.to_datetime(end_datetime).tz_localize("UTC")
-        else:
-            end_datetime = pd.to_datetime(end_datetime).tz_convert("UTC")
-
-        # Convertir las fechas a UTC y formato ISO 8601
-        start_datetime = start_datetime.isoformat().replace("+00:00", "Z")
-        end_datetime = end_datetime.isoformat().replace("+00:00", "Z")
-        
-        query_api = self.influx_client.query_api()
         query = f'''
         from(bucket: "{self.bucket}")
             |> range(start: {start_datetime}, stop: {end_datetime})
@@ -55,7 +44,9 @@ class CodeIDProcessor:
         '''
 
         try:
-            result = query_api.query(org=self.data_manager.config['influxdb']['org'], query=query)
+            result = self.influx_client.query_api().query(
+                org=self.data_manager.config['influxdb']['org'], query=query
+            )
             data = [record.values for table in result for record in table.records]
             df = pd.DataFrame(data).sort_values('_time')
             if df.empty:
@@ -67,8 +58,7 @@ class CodeIDProcessor:
             print(f"Error al consultar datos de InfluxDB para CodeID {codeid}: {e}")
             return pd.DataFrame()
 
-    def identify_activity_segments(self, df: pd.DataFrame, threshold_seconds: float = 70, \
-                    foot:str = 'Left') -> pd.DataFrame:
+    def identify_activity_segments(self, df: pd.DataFrame, threshold_seconds: float = 70, foot:str = 'Left') -> pd.DataFrame:
         """
         Identifica segmentos contiguos de datos basados en un umbral de tiempo.
 
@@ -94,9 +84,9 @@ class CodeIDProcessor:
             """
             df = df.assign(_time_diff= df['_time'].diff().dt.total_seconds())
 
-            # Identificar los grupos donde la diferencia es mayor a 80 segundos o el 'DeviceName' cambia
-            df= df.assign(group = ((df['_time_diff'] > threshold_seconds) | \
-                            (df['DeviceName'] != df['DeviceName'].shift())).cumsum())
+            # Identificar los grupos donde la diferencia es mayor a 70 segundos o el 'DeviceName' cambia
+            df= df.assign(group = ((df['_time_diff'] > threshold_seconds) | 
+                                   (df['DeviceName'] != df['DeviceName'].shift())).cumsum())
 
             # Generar el nuevo dataframe con los grupos y los valores 'time_from' y 'time_until'
             result_df = df.groupby('group').agg(
@@ -115,20 +105,22 @@ class CodeIDProcessor:
         
         if df.empty:
             print("No se encontraron datos en el DataFrame proporcionado.")
-            return pd.DataFrame(columns=["codeid_id", "foot", "device_name", "mac", "start_time", "end_time"])
+            return pd.DataFrame(columns=['time_from','time_until','CodeID','DeviceName','Foot','total_value','mac'])
 
         # Verificar si '_time' ya tiene zona horaria antes de localización
         if not pd.api.types.is_datetime64_any_dtype(df["_time"]):
             df["_time"] = pd.to_datetime(df["_time"])
             if df["_time"].dt.tz is None:
                 df["_time"] = df["_time"].dt.tz_localize("Europe/Madrid")
-            # df["_time"] = df["_time"].dt.tz_convert("UTC")
 
-        df  = df.drop(columns=['result','table','_field','lng','lat']).sort_values("_time")
-        dfF = df.loc[df['Foot']==foot,:]
-        
-        dfFg= grouping(dfF, threshold_seconds)
-        return(dfFg)
+        clean = df.drop(columns=['result','table','_field','lng','lat']) \
+                  .sort_values("_time")
+        filtered = clean[clean['Foot']==foot]
+        grouped  = grouping(filtered, threshold_seconds)
+
+        return grouped if not grouped.empty else pd.DataFrame(columns=[
+            'time_from','time_until','CodeID','DeviceName','Foot','total_value','mac'
+        ])
     
     def inter_segs(self,sg1:pd.DataFrame,sg2:pd.DataFrame)->pd.DataFrame:
         """
@@ -152,6 +144,13 @@ class CodeIDProcessor:
                 'time_from': max(row['time_from_1'], row['time_from_2']),
                 'time_until': min(row['time_until_1'], row['time_until_2'])
             })        
+        
+        if sg1.empty or sg2.empty:
+            return pd.DataFrame(columns=[
+                'time_from','time_until',
+                'R1_id','R2_id','codeid_id_1','codeid_id_2'
+            ])
+        
         sg1 = sg1.reset_index().rename(columns={'index':'R1_id'})
         sg2 = sg2.reset_index().rename(columns={'index':'R2_id'})
         # Realizar un producto cartesiano entre los DataFrames
@@ -160,17 +159,18 @@ class CodeIDProcessor:
         cross_join['intersects'] = cross_join.apply(is_intersection, axis=1)
         # Filtrar solo las filas con intersección
         intersections = cross_join[cross_join['intersects']]
+        if intersections.empty:
+            return pd.DataFrame(columns=[
+                'time_from','time_until',
+                'R1_id','R2_id','codeid_id_1','codeid_id_2'
+            ])
         # Calcular los valores de la intersección para las columnas time_from y time_until
-        intersections.loc[:,['time_from', 'time_until']] = intersections.apply( \
-                            calculate_intersection, axis=1)
+        intersections.loc[:,['time_from', 'time_until']] = intersections.apply(calculate_intersection, axis=1)
         # Crear el DataFrame con las columnas solicitadas
-        if intersections.shape[0] > 0:
-            result_df = intersections[['time_from', 'time_until', 'R1_id', 'R2_id', \
-                    'codeid_id_1','codeid_id_2']]
-            result_df = result_df.reset_index(drop=True)
-            return result_df
-        else:
-            return None
+        result_df = intersections[['time_from', 'time_until', 'R1_id', 'R2_id', \
+                'codeid_id_1','codeid_id_2']]
+        result_df = result_df.reset_index(drop=True)
+        return result_df
 
     def merge_activity_legs_to_all(self, act_segR: pd.DataFrame, act_segL: pd.DataFrame, \
                                     inter: pd.DataFrame) -> pd.DataFrame:

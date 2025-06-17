@@ -1,30 +1,29 @@
 # Configuration file for the Sphinx documentation builder.
 #
-# For the full list of built-in configuration values, see the documentation:
+# For the full list of built-in configuration values, see:
 # https://www.sphinx-doc.org/en/master/usage/configuration.html
 
-# -- Project information -----------------------------------------------------
-# https://www.sphinx-doc.org/en/master/usage/configuration.html#project-information
 import os
 import sys
 sys.path.insert(0, os.path.abspath('..'))
 
-project = 'MS_Activity_Movement'
+# -- Project information -----------------------------------------------------
+
+project = 'MS Monitoring'
 copyright = '2025, Diego Parrilla Calderón & Joaquín Ordieres-Meré'
 author = 'Diego Parrilla Calderón & Joaquín Ordieres-Meré'
-release = '00.00.02'
+release = '0.1.0'   # debe coincidir con la versión en pyproject.toml
 
 # -- General configuration ---------------------------------------------------
-# https://www.sphinx-doc.org/en/master/usage/configuration.html#general-configuration
 
 extensions = [
-'sphinx.ext.autodoc',
-'sphinx.ext.viewcode',
-'sphinx.ext.napoleon',
-'sphinx.ext.intersphinx',
-'sphinx.ext.githubpages',
-'sphinx.ext.graphviz',
-'sphinx.ext.autosummary'
+    'sphinx.ext.autodoc',
+    'sphinx.ext.viewcode',
+    'sphinx.ext.napoleon',
+    'sphinx.ext.intersphinx',
+    'sphinx.ext.githubpages',
+    'sphinx.ext.graphviz',
+    'sphinx.ext.autosummary',
 ]
 
 myst_enable_extensions = [
@@ -47,17 +46,16 @@ myst_enable_extensions = [
 templates_path = ['_templates']
 exclude_patterns = ['_build', 'Thumbs.db', '.DS_Store']
 
-autosummary_generate = True  # Habilita la generación automática de resúmenes
+autosummary_generate = True
 autodoc_default_options = {
-    'members': True,          # Incluye todos los miembros (clases, funciones, etc.)
-    'undoc-members': True,    # Incluye miembros no documentados
-    'private-members': True,  # Incluye miembros privados (_nombre)
+    'members': True,
+    'undoc-members': True,
+    'private-members': True,
 }
 
 language = 'es'
 
 # -- Options for HTML output -------------------------------------------------
-# https://www.sphinx-doc.org/en/master/usage/configuration.html#options-for-html-output
 
 html_theme = 'sphinx_rtd_theme'
 html_static_path = ['_static']

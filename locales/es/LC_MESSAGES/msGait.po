@@ -302,3 +302,7 @@ msgstr "Procesando ventana desde {f} hasta {u}..."
 #: ms_monitoring/find_activity.py
 msgid "ERR_QUERY_ACTIVITY_ALL"
 msgstr "Error al consultar activity_all: {e}"
+
+#: ms_monitoring/find_activity.py
+msgid "ARG_HEAD_ROWS"
+msgstr "Número de filas a mostrar en nivel de verbosidad 2"

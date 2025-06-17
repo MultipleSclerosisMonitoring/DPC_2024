@@ -1,32 +1,39 @@
-[project]
-name = "ms_monitoring"
-version = "0.1.0"
-description = "Basic Processing Wearable Sensoria + HealthyWear"
-authors = [
-    { name = "Diego Parrilla Calderon", email = "diego.parrilla.calderon@alumnos.upm.es" }
-]
-readme = "README.md"
-keywords = ["SclerosisMonitoring", "msTools", "python", "msCodeID"]
-classifiers = [
-    "Programming Language :: Python :: 3",
-    "License :: OSI Approved :: MIT License",
-    "Operating System :: OS Independent"
-]
-dynamic = ["version", "description", "readme", "keywords", "classifiers"]
-
-requires-python = ">=3.12,<4.0"
-
-dependencies = [
-    "pandas >= 2.0.0",
-    "psycopg2 >= 2.9.5",
-    "influxdb-client >= 1.35.0",
-    "PyYAML >= 6.0.1",
-]
-
 [tool.poetry]
-packages = [{include = "ms_monitoring"}]
-include = ["msTools/*", "msCodeID/*", "msGait/*"]
+name        = "ms_monitoring"
+version     = "0.1.0"
+description = "Basic Processing Wearable Sensoria + HealthyWear"
+authors     = [
+  "Diego Parrilla Calderon <…>",
+  "Joaquín Ordieres-Meré <…>"
+]
+readme      = "README.md"
+keywords    = ["SclerosisMonitoring", "msTools", "python", "msCodeID"]
+license     = "MIT"
+homepage    = "https://github.com/MultipleSclerosisMonitoring/DPC_2024"
+repository  = "https://github.com/MultipleSclerosisMonitoring/DPC_2024"
 
-[project.urls]
-homepage = "https://github.com/MultipleSclerosisMonitoring/DPC_2024"
-issues = "https://github.com/MultipleSclerosisMonitoring/DPC_2024/issues"
+# Empaquetamos explícitamente cada directorio que tiene código
+packages = [
+  { include = "ms_monitoring" },
+  { include = "msTools"       },
+  { include = "msCodeID"      },
+  { include = "msGait"        },
+]
+
+[tool.poetry.dependencies]
+python            = ">=3.12,<4.0"
+pandas            = ">=2.0.0"
+psycopg2          = ">=2.9.5"
+influxdb-client   = ">=1.35.0"
+PyYAML            = ">=6.0.1"
+pydantic = "^2.11.7"
+scipy = "^1.15.3"
+
+[tool.poetry.urls]
+homepage   = "https://github.com/MultipleSclerosisMonitoring/DPC_2024"
+repository = "https://github.com/MultipleSclerosisMonitoring/DPC_2024"
+issues     = "https://github.com/MultipleSclerosisMonitoring/DPC_2024/issues"
+
+[build-system]
+requires       = ["poetry-core>=1.0.0"]
+build-backend  = "poetry.core.masonry.api"
