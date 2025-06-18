@@ -103,9 +103,16 @@ postgresql:
   database: "<DB_NAME>"
 
 movement:
-  freq_band_min: 0.5
-  freq_band_max: 2.0
+  # Umbral para el módulo de aceleración (is_effective_by_time)
+  accel_threshold: 0.2
+  # Umbral para el módulo de giroscopio (is_effective_by_time)
+  gyro_threshold: 0.2
+  # Threshold de potencia en la banda de frecuencia
   power_threshold: 0.5
+  # Banda de frecuencia para Welch (Hz)
+  freq_band_min: 0.4
+  freq_band_max: 1.4
+  # Segundos mínimos continuos sobre el umbral para considerar actividad
   min_continuous_seconds: 10
 ```
 
@@ -120,7 +127,7 @@ Tras la instalación, puede usar los siguientes módulos:
 Extrae CodeIDs únicos de InfluxDB y almacena segmentos de actividad en PostgreSQL.
 
 ```bash
-python -m ms_monitoring.find_mscodeids   -c config.yaml   [-f "2024-01-01 00:00:00" -u "2024-12-31 23:59:59"]   [-v 1]
+poetry run python -m ms_monitoring.find_mscodeids -f "2024-06-01 00:00:00" -u "2024-06-30 23:59:59" -c config.yaml -v 2
 ```
 
 Opciones:
@@ -129,27 +136,13 @@ Opciones:
 - `-c, --config`: ruta a `config.yaml`.  
 - `-v, --verbose`: nivel de verbosidad.
 
-### 2. `find_activityall`
 
-Busca IDs de `activity_all` que intersectan una ventana temporal y opcionalmente filtra por patrón de CodeID.
-
-```bash
-python -m ms_monitoring.find_activityall   -c config.yaml   -f "2024-06-01 00:00:00"   -u "2024-06-30 23:59:59"   [-p "^PATTERN"]   [-q]   [-v 1]
-```
-
-- `-p, --pattern`: regex para filtrar CodeIDs.  
-- `-q, --quiet`: salida JSON solo de IDs.
-
-### 3. `find_activity`
+### 2. `find_activity`
 
 Detecta y almacena marchas efectivas usando los IDs de `activity_all` o una ventana temporal.
 
 ```bash
-# Por IDs
-python -m ms_monitoring.find_activity   -c config.yaml   -i "[12,34,56]"   [-v 2]
-
-# Por ventana
-python -m ms_monitoring.find_activity   -c config.yaml   -f "2024-01-01 00:00:00"   -u "2024-12-31 23:59:59"   [-v 1]
+poetry run python -m ms_monitoring.find_activity -f "2024-06-01 00:00:00" -u "2024-06-30 23:59:59" -c config.yaml --head-rows 10 -v 2
 ```
 
 ---
