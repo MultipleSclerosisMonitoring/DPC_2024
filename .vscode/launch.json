@@ -5,29 +5,29 @@
     "version": "0.2.0",
     "configurations": [
         {
-            "name": "Python Debugger: Current File",
+            "name": "Python Debugger: find_mscodeids.py",
             "type": "debugpy",
             "request": "launch",
             "program": "${file}",
             "args": [
                 "-f","2024-01-01 00:00:00",
                 "-u","2025-03-06 23:59:59",
-                "-c","./config.yaml",
+                "-c","./.config.yaml",
                 "-v","1"
             ],
             "console": "integratedTerminal"
         },
         {
-            "name": "Debugger: without time",
+            "name": "Debugger: find_activity.py",
             "type": "debugpy",
             "request": "launch",
             "program": "${file}",
             "args": [
                 "-i","[249,250]",
-                "-c","./config.yaml",
+                "-c","./.config.yaml",
                 "-l","es_ES",
                 "-v","2",
-                "-o","./outs/datos-walk.xlsx",
+                "-o","./outs/datos-walk_249.xlsx",
             ],
             "console": "integratedTerminal",
             "cwd": "${workspaceFolder}/"

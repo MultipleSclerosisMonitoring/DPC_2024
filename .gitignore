@@ -2,6 +2,8 @@
 __pycache__/
 *.py[cod]
 *$py.class
+*.__pycache__
+*.pyc
 
 # Distribution / packaging
 dist/
@@ -12,6 +14,7 @@ build/
 .venv/
 env/
 venv/
+vpy/
 ENV/
 
 # Sphinx documentation build
@@ -30,3 +33,5 @@ site/
 
 # Jupyter
 .ipynb_checkpoints/
+
+.config*.yaml

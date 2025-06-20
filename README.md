@@ -2,21 +2,23 @@
 
 TFG Diego Parrilla Calderón
 
-**MS Monitoring** (`ms_monitoring`) es una colección modular de utilidades en Python para la monitorización de dispositivos wearables (Sensoria, HealthyWear) en estudios de esclerosis múltiple. El proyecto está organizado en cuatro componentes principales:
+**MS Monitoring** (`ms_monitoring`) es una colección modular de utilidades en Python para la monitorización de dispositivos wearables (Sensoria, HealthyWear) en estudios de esclerosis múltiple. El proyecto está organizado en cuatro componentes principales (un repositorio y tres paquetes de python):
 
-- **ms_monitoring**: Scripts CLI para flujo completo de análisis (extracción de CodeIDs, segmentos de actividad, detección de marchas efectivas).
-- **msTools**: Biblioteca de utilidades compartidas (gestión de base de datos, I18N, modelos de datos, utilidades de tiempo).
-- **msCodeID**: Procesamiento de CodeIDs: extracción de datos de InfluxDB y almacenamiento en PostgreSQL de segmentos de actividad.
-- **msGait**: Procesamiento de señal de marcha: detección de segmentos, clasificación y análisis de marchas efectivas.
+- **ms_monitoring**: Scripts CLI para flujo completo de análisis 
+      (extracción de CodeIDs, segmentos de actividad, detección de marchas efectivas).
+- **msTools**: *(Paquete python)* Biblioteca de utilidades compartidas 
+      (gestión de base de datos, I18N, modelos de datos, utilidades de tiempo).
+- **msCodeID**: *(Paquete python)* Procesamiento de CodeIDs: extracción de datos de InfluxDB y almacenamiento en PostgreSQL de segmentos de actividad.
+- **msGait**: *(Paquete python)* Procesamiento de señal de marcha: detección de segmentos, clasificación y análisis de marchas efectivas.
 
 ---
 
 ## Estructura de directorios
 
 ```
-C:.
+root
 ├── .gitignore
-├── config.yaml               # Configuración de InfluxDB y PostgreSQL
+├── config.yaml               # Template configuración de InfluxDB y PostgreSQL
 ├── ids.json
 ├── LICENSE
 ├── pyproject.toml            # configuración Poetry
@@ -83,7 +85,7 @@ pip install dist/ms_monitoring-0.1.0-py3-none-any.whl
 
 ## Configuración
 
-Edite `config.yaml` con los datos de sus servidores:
+Edite `.config.yaml` con los datos de sus servidores. Dispone de un template en `config.yaml` :
 
 ```yaml
 influxdb:
@@ -118,7 +120,26 @@ movement:
 
 ---
 
-## Uso de los scripts CLI
+## Uso de los scripts CLI  
+<span style="color:red">
+(Esto ¿no debería estar en la carpeta ms_monitoring? 
+
+Ahí, cada Proceso debería tener un diagrama de bloques (puedes usar graphviz/dot) y detallar que ocurre cuando no se pasa algún parámetro, etc.
+
+
+Aquí deberíamos poner las tres pipelines de valor:
+
+Proceso 1.- Identificación de CodeID y ejemplo de ejecución.
+
+Proceso 2.- Identificación de Actividad.
+
+Proceso 3.- Identificación de marcha de ambos pies.
+
+)
+</span>
+
+
+<span style="color:black">
 
 Tras la instalación, puede usar los siguientes módulos:
 
@@ -127,13 +148,13 @@ Tras la instalación, puede usar los siguientes módulos:
 Extrae CodeIDs únicos de InfluxDB y almacena segmentos de actividad en PostgreSQL.
 
 ```bash
-poetry run python -m ms_monitoring.find_mscodeids -f "2024-06-01 00:00:00" -u "2024-06-30 23:59:59" -c config.yaml -v 2
+poetry run python -m ms_monitoring.find_mscodeids -f "2024-06-01 00:00:00" -u "2024-06-30 23:59:59" -c .config.yaml -v 2
 ```
 
 Opciones:
 - `-f, --from`: fecha inicio (YYYY-MM-DD HH:MM:SS).  
 - `-u, --until`: fecha fin.  
-- `-c, --config`: ruta a `config.yaml`.  
+- `-c, --config`: ruta a `.config.yaml`.  
 - `-v, --verbose`: nivel de verbosidad.
 
 
