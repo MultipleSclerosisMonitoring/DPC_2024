@@ -24,10 +24,10 @@ def main():
     parser = argparse.ArgumentParser(description=i18n._("ARG_TIT_FIND_GAIT"))
     parser.add_argument("-i", "--ids", dest="act_all_ids", type=json.loads, default=None,
                         help=i18n._("ARG_LIST_ACT_ALL_IDS"))
-    parser.add_argument("-f", "--from", dest="fstart", type=str, default=None,
-                        help=i18n._("ARG_STR_TIME_FROM"))
-    parser.add_argument("-u", "--until", dest="fend", type=str, default=None,
-                        help=i18n._("ARG_STR_TIME_UNTIL"))
+    # parser.add_argument("-f", "--from", dest="fstart", type=str, default=None,
+    #                     help=i18n._("ARG_STR_TIME_FROM"))
+    # parser.add_argument("-u", "--until", dest="fend", type=str, default=None,
+    #                     help=i18n._("ARG_STR_TIME_UNTIL"))
     parser.add_argument("-c", "--config", dest="config_file", type=str, required=True,
                         help=i18n._("ARG_STR_PATH_YAML"))
     parser.add_argument("-l", "--lang", dest="lng", type=str, default="es",
