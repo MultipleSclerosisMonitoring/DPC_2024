@@ -18,16 +18,16 @@
             "console": "integratedTerminal"
         },
         {
-            "name": "Debugger: find_activity.py",
+            "name": "Debugger: find_gait.py",
             "type": "debugpy",
             "request": "launch",
             "program": "${file}",
             "args": [
-                "-i","[249,250]",
+                "-i","[[1755,1769],[1758,1773]]",
                 "-c","./.config.yaml",
                 "-l","es_ES",
                 "-v","2",
-                "-o","./outs/datos-walk_249.xlsx",
+                "-o","./outs/datos-walk_ej.xlsx",
             ],
             "console": "integratedTerminal",
             "cwd": "${workspaceFolder}/"

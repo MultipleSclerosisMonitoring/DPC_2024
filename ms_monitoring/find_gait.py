@@ -3,6 +3,7 @@ import json
 from typing import Optional, List
 
 from msTools import i18n
+from msTools.data_manager import DataManager
 from msGait.movement_detector import MovementDetector
 
 
@@ -45,66 +46,71 @@ def main():
     i18n.init_translation(args.lng)
 
     # Validación mínima
-    if args.act_all_ids is None and (not args.fstart or not args.fend):
+    if args.act_all_ids is None:
         parser.error(i18n._("ERR_MUST_SPECIFY_IDS_OR_TIME_WINDOW"))
+        
+    DM = DataManager(config_path=args.config_file)
+    rg = DM.get_record_all_legs(args.act_all_ids)
+    DM.close_all()
 
-    # Inicializar detector (gestiona internamente DataManager y recuperación de segmentos)
-    detector = MovementDetector(
-        config_file   = args.config_file,
-        sampling_rate = 50,
-        fstart        = args.fstart,
-        fend          = args.fend,
-        ids           = args.act_all_ids,
-        verbose       = args.verbose
-    )
+    for idx,row in rg.iterrows():
+        # Inicializar detector (gestiona internamente DataManager y recuperación de segmentos)
+        detector = MovementDetector(
+            config_file   = args.config_file,
+            sampling_rate = 50,
+            fstart        = row['start_time'],
+            fend          = row['end_time'],
+            ids           = row['codeleg_ids'],
+            verbose       = args.verbose
+        )
 
-    # Si no hay piernas, salimos
-    if detector.df_legs.empty:
-        return
+        # Si no hay piernas, salimos
+        if detector.df_legs.empty:
+            return
 
-    if args.verbose >= 1:
-        print(i18n._("FGAIT_1ST"))
-
-    # Detectar marchas efectivas por pierna
-    df_effective = detector.detect_effective_movement(
-        detector.df_legs,
-        nomf=args.fout,
-        vb=args.verbose
-    )
-    if df_effective.empty:
-        print(i18n._("FGAIT_NO_WALK"))
-        return
-
-    if args.verbose >= 2:
-        print(i18n._("FGAIT_WKLS_FND"))
-        print(df_effective.head(args.head_rows))
-
-    # Guardado o impresión de effective_movement
-    if args.save:
-        detector.save_to_postgresql("effective_movement", df_effective)
         if args.verbose >= 1:
-            print(i18n._("FGAIT_NUM_WALKS").format(ns=len(df_effective)))
-    else:
-        if args.verbose >= 1:
-            print("Effective movement por pierna:")
-            print(df_effective.to_string(index=False))
+            print(i18n._("FGAIT_1ST"))
 
-    # Detectar periodos de marcha efectiva simultánea (ambos pies)
-    df_gait = detector.detect_effective_gait(df_effective)
-    if df_gait.empty:
-        if args.verbose >= 1:
-            print("No se encontraron periodos de marcha efectiva simultánea.")
-    else:
-        if args.verbose >= 1:
-            print("Periodos de marcha efectiva simultánea (ambos pies):")
-            print(df_gait.to_string(index=False))
+        # Detectar marchas efectivas por pierna
+        df_effective = detector.detect_effective_movement(
+            detector.df_legs,
+            nomf=args.fout,
+            vb=args.verbose
+        )
+        if df_effective.empty:
+            print(i18n._("FGAIT_NO_WALK"))
+            return
+
+        if args.verbose >= 2:
+            print(i18n._("FGAIT_WKLS_FND"))
+            print(df_effective.head(args.head_rows))
+
+        # Guardado o impresión de effective_movement
         if args.save:
-            detector.save_to_postgresql("effective_gait", df_gait)
+            detector.save_to_postgresql("effective_movement", df_effective)
             if args.verbose >= 1:
-                print(f"{len(df_gait)} registros de effective_gait guardados")
+                print(i18n._("FGAIT_NUM_WALKS").format(ns=len(df_effective)))
+        else:
+            if args.verbose >= 1:
+                print("Effective movement por pierna:")
+                print(df_effective.to_string(index=False))
 
-    if args.verbose >= 1:
-        print(i18n._("FGAIT_END"))
+        # Detectar periodos de marcha efectiva simultánea (ambos pies)
+        df_gait = detector.detect_effective_gait(df_effective)
+        if df_gait.empty:
+            if args.verbose >= 1:
+                print("No se encontraron periodos de marcha efectiva simultánea.")
+        else:
+            if args.verbose >= 1:
+                print("Periodos de marcha efectiva simultánea (ambos pies):")
+                print(df_gait.to_string(index=False))
+            if args.save:
+                detector.save_to_postgresql("effective_gait", df_gait)
+                if args.verbose >= 1:
+                    print(f"{len(df_gait)} registros de effective_gait guardados")
+
+        if args.verbose >= 1:
+            print(i18n._("FGAIT_END"))
 
 
 if __name__ == "__main__":

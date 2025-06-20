@@ -7,6 +7,7 @@ from msTools import i18n
 from msGait.models import EffectiveMovement, ActivitySegment
 from pydantic import ValidationError
 from typing import List, Dict, Optional
+from psycopg2 import sql
 import datetime
 
 
@@ -85,6 +86,10 @@ class DataManager:
         self.pg_conn.close()
 
     def close_influxdb(self) -> None:
+        self.influxdb_client.close()
+
+    def close_all(self) -> None:
+        self.pg_conn.close()
         self.influxdb_client.close()
 
     def get_influx_client(self) -> InfluxDBClient:
@@ -418,4 +423,36 @@ class DataManager:
         except Exception as e:
             print(i18n._("PGSQL-QRY-COD-ERR").format(e=e))
             raise
+        return None
 
+    def get_record_all_legs(self, clegs: set, clname : str = "codeleg_ids") -> pd.DataFrame:
+        """ 
+        Extract the records matching the clname to clegs
+
+        Args:
+            clegs (set): pair of legs reference left,right
+            colname (str): PostgresQL Column name.
+
+        Returns:
+            pd.DataFrame: _description_
+        """
+        try:
+            array_literals = [sql.SQL("ARRAY[{}]").format(
+                    sql.SQL(', ').join(map(sql.Literal, pair))
+                ) for pair in clegs]
+
+            # Construye la cláusula IN (ARRAY[...], ARRAY[...])
+            in_clause = sql.SQL(', ').join(array_literals)
+            query = sql.SQL("SELECT * FROM activity_all WHERE {} IN ({})").format(
+                sql.Identifier(clname),in_clause)
+            with self.pg_conn.cursor() as cursor:
+                cursor.execute(query)
+                result = cursor.fetchall()
+                if result:
+                    columns = [desc[0] for desc in cursor.description]
+                    return pd.DataFrame(result, columns=columns)
+                else:
+                    raise ValueError(i18n._("PGSQL-QRY-CLNAME-NONE").format(clname=clname,clegs=clegs))
+        except Exception as e:
+            print(i18n._("PGSQL-QRY-COD-ERR").format(e=e))
+            raise
