@@ -22,7 +22,7 @@ i18n.init_translation('es')  # Inicializa por defecto
 
 def main():
     parser = argparse.ArgumentParser(description=i18n._("ARG_TIT_FIND_GAIT"))
-    parser.add_argument("-i", "--ids", dest="act_all_ids", type=json.loads, default=None,
+    parser.add_argument("-i", "--ids", dest="act_all_ids", type=json.loads, required=True,
                         help=i18n._("ARG_LIST_ACT_ALL_IDS"))
     # parser.add_argument("-f", "--from", dest="fstart", type=str, default=None,
     #                     help=i18n._("ARG_STR_TIME_FROM"))
