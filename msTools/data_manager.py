@@ -236,6 +236,11 @@ class DataManager:
         df = self.fetch_data(query)
         if df.empty and verbose >= 1:
             print("[DataManager] No se encontraron segmentos.")
+        else:
+            # Due to the lack of TZ info we must change 
+            for col in df.columns:
+                if pd.api.types.is_datetime64tz_dtype(df[col]):
+                    df[col] = df[col].dt.tz_localize(None)
         return df
 
 
@@ -263,6 +268,10 @@ class DataManager:
         df_legs = pd.DataFrame(activity_leg_like)
         if vb > 0:
             print(i18n._("VB-ACT-ALL-LEGS").format(ns=df_legs.shape[0]))
+        if df_legs.shape[0] > 0:
+            for col in df_legs.columns:
+                if pd.api.types.is_datetime64tz_dtype(df_legs[col]):
+                    df_legs[col] = df_legs[col].dt.tz_localize(None)
         return df_legs
 
 
@@ -450,7 +459,12 @@ class DataManager:
                 result = cursor.fetchall()
                 if result:
                     columns = [desc[0] for desc in cursor.description]
-                    return pd.DataFrame(result, columns=columns)
+                    df = pd.DataFrame(result, columns=columns)
+                    # Due to the lack of TZ info we must change 
+                    for col in df.columns:
+                        if pd.api.types.is_datetime64tz_dtype(df[col]):
+                            df[col] = df[col].dt.tz_localize(None)
+                    return df
                 else:
                     raise ValueError(i18n._("PGSQL-QRY-CLNAME-NONE").format(clname=clname,clegs=clegs))
         except Exception as e:

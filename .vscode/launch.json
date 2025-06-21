@@ -23,11 +23,11 @@
             "request": "launch",
             "program": "${file}",
             "args": [
-                "-i","[[1755,1769],[1758,1773]]",
+                "-i","[774,777]",
                 "-c","./.config.yaml",
                 "-l","es_ES",
                 "-v","2",
-                "-o","./outs/datos-walk_ej.xlsx",
+                // "-o","./outs/datos-walk_ids_774_777.xlsx",
             ],
             "console": "integratedTerminal",
             "cwd": "${workspaceFolder}/"

@@ -1,21 +1,18 @@
 import pandas as pd
 import numpy as np
 from pandas import ExcelWriter
-from typing import List, Optional, Tuple
 from concurrent.futures import ThreadPoolExecutor
+from typing import List, Optional
 
 from msTools.data_manager import DataManager
 from msTools import i18n
-from msTools.timeutils import ensure_utc
-from msGait.models import EffectiveMovement
-
 from scipy.signal import welch
+from msGait.models import EffectiveMovement
 from pydantic import ValidationError
-
+from msTools.timeutils import ensure_utc
+from datetime import timedelta
 
 class MovementDetector:
-    """Detects effective movement and gait periods using raw sensor data from a data manager."""
-
     def __init__(
         self,
         config_file: str,
@@ -26,61 +23,50 @@ class MovementDetector:
         ids: Optional[List[int]] = None,
         verbose: int = 1
     ) -> None:
-        """Initializes the movement detector, loads configurations and activity data.
+        """
+        Inicializa el detector:
+         - Construye internamente el DataManager.
+         - Recupera activity_all (por IDs o ventana de tiempo).
+         - Genera df_legs (piernas) a partir de activity_all.
+         - Carga parámetros de la sección `sect` del config.yaml.
+         - Ojo: VIP. Se cargan registros de activity_all por sus ids o por fechas
+           Por ello alguno de ids o fstart/fend puede ser None
+           Tiene prioridad ids. Si ids es None, entonces fechas
 
-        Args:
-            config_file (str): Path to the YAML configuration file.
-            sampling_rate (float): Sampling rate of the sensor data (in Hz).
-            sect (str): Section in the YAML config for movement detection parameters.
-            fstart (Optional[str]): Optional start timestamp for activity query.
-            fend (Optional[str]): Optional end timestamp for activity query.
-            ids (Optional[List[int]]): Optional list of segment IDs to retrieve.
-            verbose (int): Verbosity level for logging (0 = silent, 1 = info, 2 = debug).
+        :param config_file: Ruta al YAML de configuración.
+        :param sampling_rate: Frecuencia de muestreo.
+        :param sect: Sección de config para parámetros de movimiento.
+        :param fstart: Fecha/hora inicio (si no se pasan ids).
+        :param fend: Fecha/hora fin (si no se pasan ids).
+        :param ids: Lista de IDs de activity_all.
+        :param verbose: Nivel de verbosidad.
         """
         self.verbose = verbose
         self.sampling_rate = sampling_rate
 
-        # Initialize DataManager
+        # 1) DataManager interno
         self.data_manager = DataManager(config_path=config_file)
 
-        # Retrieve activity segments based on IDs or time range
+        # 2) Recuperar activity_all
         self.activity_all = self.data_manager.segments_retrieval(
-            fstart=fstart, fend=fend, ids=ids, verbose=verbose
-        )
+            fstart=fstart,fend=fend,ids=ids,verbose=verbose)
         if self.activity_all.empty and verbose >= 1:
             print(i18n._("FGAIT_NO_WINS"))
 
-        # Retrieve full sensor-linked activity
+        # 3) Generar df_legs
         self.df_legs = self.data_manager.recover_activity_all(
-            self.activity_all, vb=verbose
-        )
+            self.activity_all,vb=verbose)
 
-        # Load detection parameters from config
+        # 4) Parámetros de movimiento
         params = self.data_manager.get_config(sect)
         self.freq_band = (params["freq_band_min"], params["freq_band_max"])
-        self.min_continuous_hits = params["min_continuous_hits"]
+        self.power_threshold = params["power_threshold"]
+        self.min_continuous_seconds = params["min_continuous_seconds"]
         self.accel_threshold = params.get("accel_threshold", 0.2)
-        self.gyro_threshold = params.get("gyro_threshold", 50)
-        self.accel_power_threshold = params.get("accel_power_threshold",0.1)
-        self.gyro_power_threshold = params.get("gyro_power_threshold",1000)
+        self.gyro_threshold  = params.get("gyro_threshold", 0.2)
 
-    def close(self):
-        """Closing all the opened connections"""
-        self.data_manager.close_all()
-        
     def fetch_sensor_data(self, start_time: str, end_time: str,
                           codeid_id: int, foot: str) -> pd.DataFrame:
-        """Fetches raw sensor data from InfluxDB for a specific time interval and limb.
-
-        Args:
-            start_time (str): Start time in ISO format.
-            end_time (str): End time in ISO format.
-            codeid_id (int): Identifier to map to real CodeID.
-            foot (str): 'Left' or 'Right'.
-
-        Returns:
-            pd.DataFrame: Sensor data with fields Ax, Ay, Az, Gx, Gy, Gz, and timestamps.
-        """
         try:
             codeid = self.data_manager.get_real_codeid(codeid_id)
         except ValueError as e:
@@ -88,15 +74,15 @@ class MovementDetector:
                 print(i18n._("PGSQL-QRY-GEN-ERR").format(e=e))
             return pd.DataFrame()
 
+        # UTC ISO
         start_time = ensure_utc(start_time).isoformat().replace("+00:00", "Z")
-        end_time = ensure_utc(end_time).isoformat().replace("+00:00", "Z")
+        end_time   = ensure_utc(end_time)  .isoformat().replace("+00:00", "Z")
 
         query = f'''
         from(bucket: "{self.data_manager.bucket}")
             |> range(start: {start_time}, stop: {end_time})
-            |> filter(fn: (r) => r["CodeID"] == "{codeid}" and r["Foot"] == "{foot}")
-            |> filter(fn: (r) => r["_field"] == "Ax" or r["_field"] == "Ay" or r["_field"] == "Az" 
-                              or r["_field"] == "Gx" or r["_field"] == "Gy" or r["_field"] == "Gz")
+            |> filter(fn: (r) => r["CodeID"] == "{codeid}" and r["Foot"] == "{foot}")            
+            |> filter(fn: (r) => r["_field"] == "Ax" or r["_field"] == "Ay" or r["_field"] == "Az" or r["_field"] == "Gx" or r["_field"] == "Gy" or r["_field"] == "Gz")
             |> pivot(rowKey:["_time"], columnKey:["_field"], valueColumn:"_value")
         '''
 
@@ -109,23 +95,17 @@ class MovementDetector:
             return pd.DataFrame(data)
         except Exception as e:
             msg = str(e)
+            # Ignorar rango vacío sin spam en consola
             if "cannot query an empty range" in msg:
                 if self.verbose >= 2:
                     print(f"[MovementDetector] empty range for CodeID {codeid}, foot {foot}")
                 return pd.DataFrame()
+            # Otros errores sí los mostramos si verbose >= 1
             if self.verbose >= 1:
                 print(i18n._("INFL-QRY-DATA-ERR").format(e=e))
             return pd.DataFrame()
 
     def calculate_magnitude(self, df: pd.DataFrame) -> pd.DataFrame:
-        """Calculates signal magnitudes for acceleration and gyroscope data.
-
-        Args:
-            df (pd.DataFrame): DataFrame containing raw sensor values.
-
-        Returns:
-            pd.DataFrame: Same DataFrame with added '|a|' and '|g|' columns.
-        """
         if {"Ax", "Ay", "Az", "Gx", "Gy", "Gz"}.issubset(df.columns):
             df["|a|"] = np.sqrt(df["Ax"]**2 + df["Ay"]**2 + df["Az"]**2)
             df["|g|"] = np.sqrt(df["Gx"]**2 + df["Gy"]**2 + df["Gz"]**2)
@@ -134,108 +114,64 @@ class MovementDetector:
                 print(i18n._("MVDET-AG-NODAT"))
         return df
 
-    def is_effective_by_welch(self, signal: np.ndarray, power_threshold) -> bool:
-        """Determines if a signal contains sufficient power in a frequency band.
-
-        Args:
-            signal (np.ndarray): Input signal array.
-
-        Returns:
-            bool: True if power within the target frequency band exceeds threshold.
-        """
+    def is_effective_by_welch(self, signal: np.ndarray) -> bool:
         freqs, power = welch(signal, fs=self.sampling_rate)
         band_power = power[(freqs >= self.freq_band[0]) & (freqs <= self.freq_band[1])].sum()
-        return band_power >= power_threshold
+        return band_power >= self.power_threshold
 
     def is_effective_by_time(self, signal: np.ndarray, threshold: float) -> bool:
-        """Checks if the signal remains active for a continuous minimum duration.
-
-        Args:
-            signal (np.ndarray): Input signal array.
-            threshold (float): Activity threshold.
-
-        Returns:
-            bool: True if signal is continuously active long enough.
-        """
         std_signal = np.std(signal)
         if std_signal < 0.01:
             return False
-        active = np.abs(signal) > threshold
+        active = signal > threshold
         consecutive = np.diff(
             np.where(
                 np.concatenate(([active[0]], active[:-1] != active[1:], [True]))
             )[0]
         )[::2]
-        return (len(consecutive) >= self.min_continuous_hits)
+        return any(consecutive >= self.min_continuous_seconds * self.sampling_rate)
 
-    def per_sample_activity_mask(self, signal: np.ndarray, threshold: float) -> np.ndarray:
-        """Returns a boolean mask where signal values exceed the threshold.
-
-        Args:
-            signal (np.ndarray): Input signal.
-            threshold (float): Threshold for activity.
-
-        Returns:
-            np.ndarray: Boolean array marking active samples.
-        """
-        return signal > threshold
-    
     def detect_effective_movement(
         self,
         activity_windows: pd.DataFrame,
         nomf: str = None,
         vb: int = 0
     ) -> pd.DataFrame:
-        """Detects intervals of effective movement from sensor data.
-
-        Args:
-            activity_windows (pd.DataFrame): DataFrame containing rows with start_time, end_time, codeid_id, and foot.
-            nomf (str, optional): Path to an Excel file for exporting raw data (default is None).
-            vb (int): Verbosity level (0 = silent, 1 = info, 2 = debug).
-
-        Returns:
-            pd.DataFrame: Validated segments with effective movement data.
-        """
-
-        def segment_fixed_windows(df: pd.DataFrame, window_size: int = 256) -> List[Tuple[pd.Timestamp, pd.Timestamp]]:
+        # 
+        # Introducition of auxiliar function
+        def segment_continuous_periods(sensor_data: pd.DataFrame, max_gap_sec: float = 1.5):
             """
-            Divide los datos en ventanas consecutivas de tamaño fijo (por número de muestras).
-
-            Args:
-                df (pd.DataFrame): DataFrame con una columna '_time' ordenada.
-                window_size (int): Número de muestras por ventana.
-
-            Returns:
-                List[Tuple[pd.Timestamp, pd.Timestamp]]: Lista de (start_time, end_time) por segmento.
+            Devuelve una lista de (start_time, end_time) para los segmentos activos contiguos,
+            separados por al menos `max_gap_sec` segundos.
             """
-            if "_time" not in df.columns:
-                raise ValueError("DataFrame must contain a '_time' column.")
-            
-            df = df.sort_values("_time").reset_index(drop=True)
+            active_times = sensor_data.loc[:, '_time'].sort_values()
+            if active_times.empty:
+                return []
 
             segments = []
-            total_rows = len(df)
+            current_start = active_times.iloc[0]
+            last_time = current_start
 
-            for i in range(0, total_rows - window_size + 1, window_size):
-                start_time = df.loc[i, "_time"]
-                end_time = df.loc[i + window_size - 1, "_time"]
-                segments.append((start_time, end_time))
+            for t in active_times[1:]:
+                if (t - last_time).total_seconds() > max_gap_sec:
+                    segments.append((current_start, last_time))
+                    current_start = t
+                last_time = t
 
+            segments.append((current_start, last_time))
             return segments
-
+        #
+        # End of auxliliar function
+        # Another auxiliary function
+        #
         def merge_connected_segments(segments: list[tuple[pd.Timestamp, pd.Timestamp]], max_gap_sec=5.):
-            """Merges temporally close segments into a single one.
-
-            Args:
-                segments (List[Tuple[pd.Timestamp, pd.Timestamp]]): List of segment start and end times.
-                max_gap_sec (float): Maximum allowed gap for merging segments.
-
-            Returns:
-                List[Tuple[pd.Timestamp, pd.Timestamp]]: Merged list of segments.
+            """
+            Une segmentos consecutivos si entre ellos hay una separación menor o igual a max_gap_sec.
             """
             if not segments:
                 return []
 
+            # Asegura orden cronológico
             segments = sorted(segments, key=lambda x: x[0])
             merged = []
             current_start, current_end = segments[0]
@@ -250,15 +186,17 @@ class MovementDetector:
 
             merged.append((current_start, current_end))
             return merged
+        #
+        # End of auxliliar function
 
         if "foot" not in activity_windows.columns:
             raise ValueError(i18n._("MVNT-ROOT-MISS"))
 
         results = []
+
         writer = ExcelWriter(nomf, engine="xlsxwriter") if nomf else None
 
         for row in activity_windows.itertuples(index=False):
-            segments = []
             valid_segments = []
             try:
                 start = ensure_utc(row.start_time)
@@ -283,15 +221,10 @@ class MovementDetector:
                 ))
 
             sensor_data = self.fetch_sensor_data(start, end, codeid_id, foot)
-            sensor_data.drop(columns=['result', 'table', '_start', '_stop'],
-                             inplace=True, errors='ignore')
-            for col in sensor_data.columns:
-                if pd.api.types.is_datetime64tz_dtype(sensor_data[col]):
-                    sensor_data[col] = sensor_data[col].dt.tz_localize(None)
             if sensor_data.empty:
                 continue
 
-            # Export to Excel if requested
+            # Exportar a Excel si corresponde
             if writer:
                 sheet_base = f"{codeid_id}_{foot}_{start.strftime('%H%M%S')}"[:25]
                 max_rows = 1_000_000
@@ -315,24 +248,29 @@ class MovementDetector:
             acc = sensor_data["|a|"].to_numpy()
             gyro = sensor_data["|g|"].to_numpy()
 
-            segments = segment_fixed_windows(sensor_data, 256) # Welch requiere 256 puntos
+            acc_mask = self.per_sample_activity_mask(acc, self.accel_threshold)
+            gyro_mask = self.per_sample_activity_mask(gyro, self.gyro_threshold)
+            activity_mask = acc_mask | gyro_mask
+
+            segments = segment_continuous_periods(sensor_data, activity_mask, max_gap_sec=1.5)
 
             for seg_start, seg_end in segments:
-                seg_data = sensor_data[(sensor_data["_time"] >= seg_start) &
+                seg_data = sensor_data[(sensor_data["_time"] >= seg_start) & 
                                        (sensor_data["_time"] <= seg_end)]
 
+                # Revisar robustez espectral del segmento
                 acc_seg = seg_data["|a|"].to_numpy()
                 gyro_seg = seg_data["|g|"].to_numpy()
 
-                acc_ok = self.is_effective_by_welch(acc_seg,self.accel_power_threshold) and \
-                         self.is_effective_by_time(acc_seg-1, self.accel_threshold)
-                gyro_ok = self.is_effective_by_welch(gyro_seg, self.gyro_power_threshold) and \
+                acc_ok =  self.is_effective_by_welch(acc_seg) and \
+                          self.is_effective_by_time(acc_seg,  self.accel_threshold)
+                gyro_ok = self.is_effective_by_welch(gyro_seg) and \
                           self.is_effective_by_time(gyro_seg, self.gyro_threshold)
 
-                if acc_ok or gyro_ok:
+                if acc_ok or gyro_ok:              
                     valid_segments.append((seg_start, seg_end))
-
-            merged_segments = merge_connected_segments(valid_segments, max_gap_sec=10)
+                    
+            merged_segments = merge_connected_segments(valid_segments, max_gap_sec=1.5)
             for mstart, mend in merged_segments:
                 results.append({
                     "codeid_id": codeid_id,
@@ -341,12 +279,18 @@ class MovementDetector:
                     "duration": (mend - mstart).total_seconds(),
                     "leg": foot
                 })
-
+    
             if vb >= 2:
                 print(i18n._("MVNT-WLK-FOOT").format(
                     codeid_id=codeid_id, foot=foot,
-                    dur=(end - start).total_seconds()
+                    dur=(seg_end - seg_start).total_seconds()
                 ))
+
+                if vb >= 2:
+                    print(i18n._("MVNT-WLK-FOOT").format(
+                        codeid_id=codeid_id, foot=foot,
+                        dur=(end - start).total_seconds()
+                    ))
 
         if writer:
             writer.close()
@@ -357,64 +301,50 @@ class MovementDetector:
         except ValidationError as e:
             print(i18n._("MVNT-VAL-EFF-ERR").format(e=e))
             return pd.DataFrame()
-
+        
     def detect_effective_gait(self, df_effective: pd.DataFrame) -> pd.DataFrame:
-        """Detects overlapping periods of effective movement for both feet.
+        """
+        Determina periodos en que ambos pies realizan marcha efectiva simultáneamente.
 
-        This method determines when both the left and right feet are active
-        during the same time interval, suggesting effective gait.
-
-        Args:
-            df_effective (pd.DataFrame): DataFrame containing movement segments.
-                Required columns: ['codeid_id', 'start_time', 'end_time', 'duration', 'leg']
-
-        Returns:
-            pd.DataFrame: DataFrame with overlapping periods (gait episodes).
-                Columns: ['codeid_id', 'start_time', 'end_time', 'duration']
+        :param df_effective: DataFrame con columnas
+                             ['codeid_id','start_time','end_time','duration','leg']
+        :return: DataFrame con columnas
+                 ['codeid_id','start_time','end_time','duration']
         """
         if df_effective.empty:
-            return pd.DataFrame(columns=['codeid_id', 'start_time', 'end_time', 'duration'])
+            return pd.DataFrame(columns=['codeid_id','start_time','end_time','duration'])
 
         df = df_effective.copy()
+        # Asegurar tipos datetime
         df['start_time'] = pd.to_datetime(df['start_time'])
-        df['end_time'] = pd.to_datetime(df['end_time'])
+        df['end_time']   = pd.to_datetime(df['end_time'])
 
         gait_rows = []
-
         for codeid, grp in df.groupby('codeid_id'):
-            left = grp[grp['leg'] == 'Left'][['start_time', 'end_time']]
-            right = grp[grp['leg'] == 'Right'][['start_time', 'end_time']]
+            left  = grp[grp['leg'] == 'Left'][['start_time','end_time']]
+            right = grp[grp['leg'] == 'Right'][['start_time','end_time']]
             if left.empty or right.empty:
                 continue
 
-            # Cartesian product to find overlapping intervals
-            left = left.assign(_key=1)
+            # Producto cartesiano por codeid
+            left  = left.assign(_key=1)
             right = right.assign(_key=1)
-            merged = left.merge(right, on='_key', suffixes=('_L', '_R')).drop(columns='_key')
+            merged = left.merge(right, on='_key', suffixes=('_L','_R')).drop(columns='_key')
 
             for _, r in merged.iterrows():
                 st = max(r['start_time_L'], r['start_time_R'])
-                en = min(r['end_time_L'], r['end_time_R'])
+                en = min(r['end_time_L'],   r['end_time_R'])
                 if st < en:
                     gait_rows.append({
                         'codeid_id': codeid,
                         'start_time': st,
-                        'end_time': en,
-                        'duration': (en - st).total_seconds()
+                        'end_time':   en,
+                        'duration':   (en - st).total_seconds()
                     })
 
         return pd.DataFrame(gait_rows)
 
     def save_to_postgresql(self, table_name: str, df: pd.DataFrame) -> None:
-        """Saves the given DataFrame to a PostgreSQL table using the DataManager.
-
-        Args:
-            table_name (str): Name of the destination table.
-            df (pd.DataFrame): DataFrame to store.
-
-        Returns:
-            None
-        """
         if df.empty:
             print(i18n._("PGSQL-INS-TAB-NOD-ERR").format(table_name=table_name))
             return
