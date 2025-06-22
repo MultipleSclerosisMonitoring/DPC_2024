@@ -343,7 +343,7 @@ class DataManager:
         ddat = data.drop(columns=['time_from','time_until','CodeID'])
         return ddat[lnom]
         
-    def store_data(self, table_name: str, data: pd.DataFrame) -> None:
+    def store_data(self, table_name: str, data: pd.DataFrame, verbose: int = 1) -> None:
         """
         Almacena datos en una tabla específica en PostgreSQL, validando 
                 los datos con pydantic.
@@ -351,12 +351,13 @@ class DataManager:
         :param table_name: Nombre de la tabla.
         :param data: DataFrame con los datos a almacenar.
         """
-        if data.empty:
+        if data.empty and verbose > 0:
             print(i18n._("PGSQL-INS-TAB-NOD-ERR").format(table_name=table_name))
             return
 
         try:
-            print(i18n._("PGSQL-INS-TAB-INFO"))
+            if verbose > 0:
+                print(i18n._("PGSQL-INS-TAB-INFO"))
 
             # Convertir columnas a cadenas si es necesario
             if "start_time" in data.columns:
@@ -405,7 +406,10 @@ class DataManager:
                     inserted_id = cursor.fetchone()[0]  # Obtaining the inserted ID
                     inserted_ids.append(inserted_id)
                 self.pg_conn.commit()
-                print(i18n._("PGSQL-INS-TAB-OK").format(table_name=table_name))
+                if verbose > 0:
+                    print(i18n._("PGSQL-INS-TAB-OK").format(table_name=table_name))
+                if verbose > 1:
+                    print(i18n._("PGSQL-LST-INS").format(ids=inserted_ids))
                 return inserted_ids
         except ValidationError as e:
             print(i18n._("PGSQL-VAL-TAB-ERR").format(e=e))

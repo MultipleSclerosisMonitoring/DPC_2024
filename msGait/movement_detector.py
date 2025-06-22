@@ -413,7 +413,7 @@ class MovementDetector:
 
         return pd.DataFrame(gait_rows)
 
-    def save_to_postgresql(self, table_name: str, df: pd.DataFrame) -> None:
+    def save_to_postgresql(self, table_name: str, df: pd.DataFrame, verbose: int = 0) -> None:
         """Saves the given DataFrame to a PostgreSQL table using the DataManager.
 
         Args:
@@ -423,10 +423,10 @@ class MovementDetector:
         Returns:
             None
         """
-        if df.empty:
+        if df.empty and verbose > 0:
             print(i18n._("PGSQL-INS-TAB-NOD-ERR").format(table_name=table_name))
             return
         try:
-            self.data_manager.store_data(table_name, df)
+            self.data_manager.store_data(table_name, df, verbose)
         except Exception as e:
             print(i18n._("PGSQL-INS-TAB-ERR").format(fable_name=table_name, e=e))
