@@ -388,6 +388,8 @@ class DataManager:
                 elif table_name == "effective_gait":
                     # No validamos con pydantic; insertamos tal cual
                     validated_rows.append(row.to_dict())
+                elif table_name == "codeids":
+                    validated_rows.append(CodeID(**row.to_dict()).dict())
                 else:
                     raise ValueError(f"Tabla no reconocida: {table_name}")
 

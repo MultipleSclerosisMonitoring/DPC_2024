@@ -63,11 +63,8 @@ def main():
         print(i18n._("FGAIT_1ST"))
 
     # Detectar marchas efectivas por pierna
-    df_effective = detector.detect_effective_movement(
-        detector.df_legs,
-        nomf=args.fout,
-        vb=args.verbose
-    )
+    df_effective = detector.detect_effective_movement(detector.df_legs,
+                            nomf=args.fout,vb=args.verbose)
     if df_effective.empty:
         print(i18n._("FGAIT_NO_WALK"))
         return
@@ -83,7 +80,7 @@ def main():
             print(i18n._("FGAIT_NUM_WALKS").format(ns=len(df_effective)))
 
     # Detectar periodos de marcha efectiva simultánea (ambos pies)
-    df_gait = detector.detect_effective_gait(df_effective)
+    df_gait = detector.detect_effective_gait(df_effective,vb=args.verbose)
     if df_gait.empty:
         if args.verbose >= 1:
             print("No se encontraron periodos de marcha efectiva simultánea.")
@@ -98,6 +95,7 @@ def main():
 
     if args.verbose >= 1:
         print(i18n._("FGAIT_END"))
+    
     detector.close()
 
 

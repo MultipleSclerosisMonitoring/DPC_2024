@@ -43,7 +43,7 @@ class MovementDetector:
         # Initialize DataManager
         self.data_manager = DataManager(config_path=config_file)
 
-        # Retrieve activity segments based on IDs or time range
+        # Retrieve activity segments based on IDs or time range from activity_all table
         self.activity_all = self.data_manager.segments_retrieval(
             fstart=fstart, fend=fend, ids=ids, verbose=verbose
         )
@@ -180,17 +180,15 @@ class MovementDetector:
         """
         return signal > threshold
     
-    def detect_effective_movement(
-        self,
-        activity_windows: pd.DataFrame,
-        nomf: str = None,
-        vb: int = 0
-    ) -> pd.DataFrame:
+    def detect_effective_movement(self,activity_windows: pd.DataFrame,
+                                  nomf: str = None,vb: int = 0) -> pd.DataFrame:
         """Detects intervals of effective movement from sensor data.
 
         Args:
-            activity_windows (pd.DataFrame): DataFrame containing rows with start_time, end_time, codeid_id, and foot.
-            nomf (str, optional): Path to an Excel file for exporting raw data (default is None).
+            activity_windows (pd.DataFrame): DataFrame containing rows with start_time, 
+                                             end_time, codeid_id, and foot.
+            nomf (str, optional): Path to an Excel file for exporting raw data 
+                                  (default is None).
             vb (int): Verbosity level (0 = silent, 1 = info, 2 = debug).
 
         Returns:
@@ -223,7 +221,8 @@ class MovementDetector:
 
             return segments
 
-        def merge_connected_segments(segments: list[tuple[pd.Timestamp, pd.Timestamp]], max_gap_sec=5.):
+        def merge_connected_segments(segments: list[tuple[pd.Timestamp, pd.Timestamp]], 
+                                     max_gap_sec=5.):
             """Merges temporally close segments into a single one.
 
             Args:
@@ -250,6 +249,9 @@ class MovementDetector:
 
             merged.append((current_start, current_end))
             return merged
+        #
+        # End of aux fucntion. 
+        # Starting point for function detect_effective_movement()
 
         if "foot" not in activity_windows.columns:
             raise ValueError(i18n._("MVNT-ROOT-MISS"))
@@ -261,8 +263,8 @@ class MovementDetector:
             segments = []
             valid_segments = []
             try:
-                start = ensure_utc(row.start_time)
-                end = ensure_utc(row.end_time)
+                start = row.start_time.tz_localize('UTC') # ensure_utc(row.start_time)
+                end = row.end_time.tz_localize('UTC')     # ensure_utc(row.end_time)
             except Exception:
                 if self.verbose:
                     print(i18n._("MVNT-TS-NOV").format(row=row))
@@ -342,6 +344,9 @@ class MovementDetector:
                     "leg": foot
                 })
 
+            if vb >= 3:
+                print(i18n._("LST-SEGS").format(results=pd.DataFrame(results)))
+                
             if vb >= 2:
                 print(i18n._("MVNT-WLK-FOOT").format(
                     codeid_id=codeid_id, foot=foot,
@@ -358,7 +363,7 @@ class MovementDetector:
             print(i18n._("MVNT-VAL-EFF-ERR").format(e=e))
             return pd.DataFrame()
 
-    def detect_effective_gait(self, df_effective: pd.DataFrame) -> pd.DataFrame:
+    def detect_effective_gait(self, df_effective: pd.DataFrame,vb: int = 0) -> pd.DataFrame:
         """Detects overlapping periods of effective movement for both feet.
 
         This method determines when both the left and right feet are active
@@ -375,9 +380,12 @@ class MovementDetector:
         if df_effective.empty:
             return pd.DataFrame(columns=['codeid_id', 'start_time', 'end_time', 'duration'])
 
+        # Coerce the datetime format.
         df = df_effective.copy()
-        df['start_time'] = pd.to_datetime(df['start_time'])
-        df['end_time'] = pd.to_datetime(df['end_time'])
+        df['start_time'] = df['start_time'].apply(lambda x: x if '.' in x else x + '.000000')
+        df['start_time'] = pd.to_datetime(df['start_time'], format="%Y-%m-%dT%H:%M:%S.%f")
+        df['end_time'] = df['end_time'].apply(lambda x: x if '.' in x else x + '.000000')
+        df['end_time'] = pd.to_datetime(df['end_time'], format="%Y-%m-%dT%H:%M:%S.%f")
 
         gait_rows = []
 

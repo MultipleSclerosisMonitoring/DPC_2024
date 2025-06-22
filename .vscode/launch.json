@@ -23,7 +23,7 @@
             "request": "launch",
             "program": "${file}",
             "args": [
-                "-i","[774,777]",
+                "-i","[1]",
                 "-c","./.config.yaml",
                 "-l","es_ES",
                 "-v","2",

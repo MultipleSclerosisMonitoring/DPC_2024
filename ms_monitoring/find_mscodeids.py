@@ -148,12 +148,9 @@ def main():
 
         # Robust foot‐column check: fail if it's missing
         if 'Foot' not in sensor_data.columns:
-            sys.exit(
-                _("Critical error: 'Foot' field missing in sensor data for CodeID: {codeid}.")
-                .format(codeid=codeid)
-            )
-        # Identificar segmentos de actividad distancia 80seg (almacena en 
-        # fullref_sensor_codeid automáticamente)
+            sys.stderr.write(_(f"Critical error: 'Foot' field missing in sensor data for CodeID: {codeid}.").format(codeid=codeid))
+            continue
+        # Identificar segmentos de actividad distancia 80seg 
         try:
             activity_segL = codeid_processor.identify_activity_segments(\
                                 sensor_data,80,'Left')
