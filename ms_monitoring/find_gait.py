@@ -75,7 +75,7 @@ def main():
 
     # Guardado o impresión de effective_movement
     if args.save:
-        detector.save_to_postgresql("effective_movement", df_effective)
+        detector.save_to_postgresql("effective_movement", df_effective,vb=args.verbose)
         if args.verbose >= 1:
             print(i18n._("FGAIT_NUM_WALKS").format(ns=len(df_effective)))
 
@@ -87,9 +87,16 @@ def main():
     else:
         if args.verbose >= 1:
             print("Periodos de marcha efectiva simultánea (ambos pies):")
-            print(df_gait.to_string(index=False))
+            if args.verbose >= 2:
+                df_string = df_gait.to_string(index=False)
+                indentation = "     "  # 5 spaces
+                # Divide la cadena en líneas, sangra cada línea y únelas de nuevo
+                indented_df_string = "\n".join([indentation + line for line in 
+                                                df_string.splitlines()])
+                print(indented_df_string)
+
         if args.save:
-            detector.save_to_postgresql("effective_gait", df_gait)
+            detector.save_to_postgresql("effective_gait", df_gait,vb=args.verbose)
             if args.verbose >= 1:
                 print(f"{len(df_gait)} registros de effective_gait guardados")
 
