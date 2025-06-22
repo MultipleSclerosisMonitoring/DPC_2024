@@ -63,8 +63,7 @@ def main():
         print(i18n._("FGAIT_1ST"))
 
     # Detectar marchas efectivas por pierna
-    df_effective = detector.detect_effective_movement(detector.df_legs,
-                            nomf=args.fout,vb=args.verbose)
+    df_effective = detector.detect_effective_movement(detector.df_legs,args.fout,args.verbose)
     if df_effective.empty:
         print(i18n._("FGAIT_NO_WALK"))
         return
@@ -75,12 +74,12 @@ def main():
 
     # Guardado o impresión de effective_movement
     if args.save:
-        detector.save_to_postgresql("effective_movement", df_effective,vb=args.verbose)
+        detector.save_to_postgresql("effective_movement", df_effective,args.verbose)
         if args.verbose >= 1:
             print(i18n._("FGAIT_NUM_WALKS").format(ns=len(df_effective)))
 
     # Detectar periodos de marcha efectiva simultánea (ambos pies)
-    df_gait = detector.detect_effective_gait(df_effective,vb=args.verbose)
+    df_gait = detector.detect_effective_gait(df_effective,args.verbose)
     if df_gait.empty:
         if args.verbose >= 1:
             print("No se encontraron periodos de marcha efectiva simultánea.")
@@ -96,7 +95,7 @@ def main():
                 print(indented_df_string)
 
         if args.save:
-            detector.save_to_postgresql("effective_gait", df_gait,vb=args.verbose)
+            detector.save_to_postgresql("effective_gait", df_gait,args.verbose)
             if args.verbose >= 1:
                 print(f"{len(df_gait)} registros de effective_gait guardados")
 

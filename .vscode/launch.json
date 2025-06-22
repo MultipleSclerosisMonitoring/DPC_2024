@@ -28,6 +28,7 @@
                 "-l","es_ES",
                 "-v","2",
                 // "-o","./outs/datos-walk_ids_774_777.xlsx",
+                "--save"
             ],
             "console": "integratedTerminal",
             "cwd": "${workspaceFolder}/"
