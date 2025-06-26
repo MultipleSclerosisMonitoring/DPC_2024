@@ -2,10 +2,34 @@
 
 Scripts de línea de comandos para extracción y procesamiento de datos de actividad.
 
-Este directorio contiene dos utilidades principales:
+## Flujo de procesamiento (paso a paso)
 
-- **find_mscodeids**: Extrae CodeIDs de InfluxDB y registra ventanas de actividad en PostgreSQL.
-- **find_activity**: Detecta marchas efectivas a partir de IDs de ventanas de actividad o una ventana temporal.
+1. **Extracción de CodeIDs y ventanas de actividad**  
+  Ejecuta `find_mscodeids` para extraer identificadores de dispositivo y generar tablas 
+  `activity_leg` y `activity_all` en PostgreSQL.  
+
+  ```bash
+  python -m ms_monitoring.find_mscodeids \
+    -f "YYYY-MM-DD HH:MM:SS" \
+    -u "YYYY-MM-DD HH:MM:SS" \
+    -c config.yaml \
+    -v 2
+  ```
+
+2. **Detección de marchas efectivas**  
+  Ejecuta `find_gait` para analizar los segmentos de `activity_all`,  
+  generar `effective_movement` y `effective_gait` y guardarlos (opcional).  
+
+  ```bash
+  python -m ms_monitoring.find_gait \
+    -i "[ID1,ID2,...]" \
+    -c config.yaml \
+    -l es \
+    --head-rows 8 \
+    --output salida.xlsx \
+    --save \
+    -v 2
+  ```
 
 ## Esquema de tablas relevantes
 
@@ -44,39 +68,27 @@ python -m ms_monitoring.find_mscodeids \
 - `-u, --until`: Fecha y hora de fin (por defecto: ahora).
 - `-v, --verbose`: Nivel de verbosidad.
 
-### find_activity
+### find_gait
 
 ```bash
-python -m ms_monitoring.find_activity \
+python -m ms_monitoring.find_gait \
   -c config.yaml \
-  [-i "[ID1,ID2,...]" | -f "YYYY-MM-DD HH:MM:SS" -u "YYYY-MM-DD HH:MM:SS"] \
+  -i "[ID1,ID2,...]" \
+  -l es \
   [--output salida.xlsx] \
   [--head-rows N] \
   [--save] \
   [-v N]
+
 ```
 
+- `-c, --config`: Ruta al fichero de configuración YAML.
 - `-i, --ids`: Lista JSON de IDs de `activity_all`.
-- `-f, --from`, `-u, --until`: Rango de tiempo alternativo a `-i`.
+- `-l, --lang`: Idioma de la interfaz (es por defecto).
 - `--output`: Fichero Excel de salida (para datos RAW de sensores).
 - `--head-rows`: Filas a mostrar con `-v >=2` (por defecto: 5).
 - `--save`: Si se especifica, guarda también los resultados en la tabla `effective_gait`.
 - `-v, --verbose`: Nivel de verbosidad.
-
-## Ejemplo con `leeme.txt`
-
-```bash
-while read session; do
-  desde=$(echo "$session" | sed -n "s/.*'desde':'\([^']*\)'.*/\1/p")
-  hasta=$(echo "$session" | sed -n "s/.*'hasta':'\([^']*\)'.*/\1/p")
-  name=$(echo "$session" | sed -n "s/.*'name':'\([^']*\)'.*/\1/p")
-  python -m ms_monitoring.find_activity \
-    -c config.yaml \
-    -f "$desde" -u "$hasta" \
-    --save \
-    -v 1
-done < leeme.txt
-```
 
 ## Licencia
 

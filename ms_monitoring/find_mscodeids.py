@@ -63,17 +63,17 @@ def main():
     data_manager = DataManager(config_path=args.config_file)
     codeid_processor = CodeIDProcessor(data_manager)
 
-    # Crear/verificar tablas en PostgreSQL
-    if args.verbose >= 1:
-        print(_("Creating/verifying necessary tables..."))
+    # # Crear/verificar tablas en PostgreSQL
+    # if args.verbose >= 1:
+    #     print(_("Creating/verifying necessary tables..."))
 
-    try:
-        data_manager.check_and_create_tables("msTools/create_tables.sql")
-        if args.verbose >= 1:
-            print(_("Tables verified and created if necessary."))
-    except Exception as e:
-        print(_("Error verifying/creating tables: ") + str(e))
-        return
+    # try:
+    #     data_manager.check_and_create_tables("msTools/create_tables.sql")
+    #     if args.verbose >= 1:
+    #         print(_("Tables verified and created if necessary."))
+    # except Exception as e:
+    #     print(_("Error verifying/creating tables: ") + str(e))
+    #     return
 
     # Gestión de fechas usando ensure_utc()
     if args.from_date:
@@ -117,6 +117,12 @@ def main():
     if args.verbose >= 1:
         print(_("Found {n} different CodeIDs from {start} to {end}.").format(
             n=len(codeids), start=args.from_date, end=args.until_date))
+    
+    if args.verbose >= 3:
+        print(_("LBL_LIST_CODEIDS"))
+        print(_("List of CodeIDs:"))
+        for cid in codeids:
+            print(f"  - {cid}")
 
     # Procesar CodeIDs
     for codeid in codeids:
@@ -125,9 +131,7 @@ def main():
 
         # Guardar el CodeID en la base de datos y obtener su ID
         try:
-            codeid_id = data_manager.store_codeid(codeid)
-            if args.verbose >= 2:
-                print(_("CodeID {codeid} stored with ID {id}.").format(codeid=codeid, id=codeid_id))
+            codeid_id, is_new = data_manager.store_codeid(codeid, args.verbose)
         except Exception as e:
             print(_("Error storing CodeID {codeid}: {error}").format(codeid=codeid, error=str(e)))
             continue
@@ -156,6 +160,17 @@ def main():
                                 sensor_data,80,'Left')
             activity_segR = codeid_processor.identify_activity_segments(\
                                 sensor_data,80,'Right')
+            # ———————— ELIMINAR SEGMENTOS DE DURACIÓN CERO ————————
+            if not activity_segL.empty:
+                activity_segL = activity_segL.loc[
+                    (activity_segL['time_until'] - activity_segL['time_from']).dt.total_seconds() > 0
+                ]
+
+            if not activity_segR.empty:
+                activity_segR = activity_segR.loc[
+                    (activity_segR['time_until'] - activity_segR['time_from']).dt.total_seconds() > 0
+                ]
+            # ————————————————————————————————————————————————
             # Preparing and accomodating data for postgresql table
             if activity_segL.empty:
                 if args.verbose >= 1:
