@@ -6,7 +6,7 @@ from msTools.models import CodeID, ActivityLeg, ActivityAll
 from msTools import i18n
 from msGait.models import EffectiveMovement, ActivitySegment
 from pydantic import ValidationError
-from typing import List, Dict, Optional
+from typing import List, Dict, Optional, Tuple
 from psycopg2 import sql
 import datetime
 
@@ -275,7 +275,7 @@ class DataManager:
         return df_legs
 
 
-    def store_codeid(self, codeid: str) -> int:
+    def store_codeid(self, codeid: str, verbose: int = 0) -> Tuple[int, bool]:
         """
         Almacena un CodeID único en la tabla codeids y devuelve su ID.
 
@@ -295,11 +295,17 @@ class DataManager:
                 )
                 result = cursor.fetchone()
                 if result:
+                    new_id = result[0]
                     self.pg_conn.commit()
-                    return result[0]  # Devuelve el ID recién creado
+                    if verbose >= 2:
+                        print(f"CodeID {codeid} ➞ nuevo, id = {new_id}")
+                    return new_id, True
                 # Si ya existe, buscar el ID
                 cursor.execute("SELECT id FROM codeids WHERE codeid = %s;", (validated_codeid.codeid,))
-                return cursor.fetchone()[0]  # Devuelve el ID existente
+                if verbose >= 2:
+                    print(f"CodeID {codeid} ➞ existente, id = {existing_id}")
+                existing_id = cursor.fetchone()[0]
+                return existing_id, False
         except ValidationError as e:
             # print()
             print(i18n._("PGSQL-VAL-COD-ERR").format(e=e))
