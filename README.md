@@ -120,54 +120,6 @@ movement:
 
 ---
 
-## Uso de los scripts CLI  
-<span style="color:red">
-(Esto ¿no debería estar en la carpeta ms_monitoring? 
-
-Ahí, cada Proceso debería tener un diagrama de bloques (puedes usar graphviz/dot) y detallar que ocurre cuando no se pasa algún parámetro, etc.
-
-
-Aquí deberíamos poner las tres pipelines de valor:
-
-Proceso 1.- Identificación de CodeID y ejemplo de ejecución.
-
-Proceso 2.- Identificación de Actividad.
-
-Proceso 3.- Identificación de marcha de ambos pies.
-
-)
-</span>
-
-
-<span style="color:black">
-
-Tras la instalación, puede usar los siguientes módulos:
-
-### 1. `find_mscodeids`
-
-Extrae CodeIDs únicos de InfluxDB y almacena segmentos de actividad en PostgreSQL.
-
-```bash
-poetry run python -m ms_monitoring.find_mscodeids -f "2024-06-01 00:00:00" -u "2024-06-30 23:59:59" -c .config.yaml -v 2
-```
-
-Opciones:
-- `-f, --from`: fecha inicio (YYYY-MM-DD HH:MM:SS).  
-- `-u, --until`: fecha fin.  
-- `-c, --config`: ruta a `.config.yaml`.  
-- `-v, --verbose`: nivel de verbosidad.
-
-
-### 2. `find_activity`
-
-Detecta y almacena marchas efectivas usando los IDs de `activity_all` o una ventana temporal.
-
-```bash
-poetry run python -m ms_monitoring.find_activity -f "2024-06-01 00:00:00" -u "2024-06-30 23:59:59" -c config.yaml --head-rows 10 -v 2
-```
-
----
-
 ## Documentación
 
 La documentación completa está en `docs/`. Para generarla:
