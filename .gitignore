@@ -35,3 +35,6 @@ site/
 .ipynb_checkpoints/
 
 .config*.yaml
+
+# Output files
+outs/*
