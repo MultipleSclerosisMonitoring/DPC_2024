@@ -5,48 +5,38 @@ in multiple sclerosis monitoring studies.
 
 ## High-Level Workflow
 
-```graphviz
-  :caption: Sequence Diagram for `ms_monitoring` Workflow
-  :align: center
+```mermaid
+sequenceDiagram
+    participant U as User
+    participant C1 as find_mscodeids CLI
+    participant P as CodeIDProcessor
+    participant DM as DataManager
+    participant DB as InfluxDB
+    participant PG as PostgreSQL
+    U->>C1: run `python -m ms_monitoring.find_mscodeids`
+    C1->>P: __init__(config)
+    P->>DM: get_codeids_in_range()
+    DM->>DB: query distinct CodeIDs
+    DM->>PG: INSERT activity_leg & activity_all
+    P-->>C1: print INFO_ALL_PROCESSED
+    C1-->>U: display summary
 
-  digraph ms_monitoring_workflow {
-    rankdir=LR;
-    node [shape=box, fontname="Helvetica"];
+    %% spacer
+    C1--x C2: 
 
-    // Actors and CLIs
-    User               [label="User"];
-    FindMSCodeIDsCLI   [label="find_mscodeids CLI"];
-    CodeIDProcessor    [label="CodeIDProcessor"];
-    DataManager        [label="DataManager"];
-    InfluxDB           [label="InfluxDB"];
-    PostgreSQL         [label="PostgreSQL"];
-    FindGaitCLI        [label="find_gait CLI"];
-    MovementDetector   [label="MovementDetector"];
+    participant C2 as find_gait CLI
+    participant M as MovementDetector
 
-    // find_mscodeids flow
-    User -> FindMSCodeIDsCLI   [label="run `python -m ms_monitoring.find_mscodeids`"];
-    FindMSCodeIDsCLI -> CodeIDProcessor [label="__init__(config)"];
-    CodeIDProcessor -> DataManager       [label="get_codeids_in_range()\nfetch & identify segments"];
-    DataManager -> InfluxDB              [label="query distinct CodeIDs"];
-    DataManager -> PostgreSQL            [label="store activity_leg & activity_all"];
-    CodeIDProcessor -> FindMSCodeIDsCLI  [label="print INFO_ALL_PROCESSED"];
-    FindMSCodeIDsCLI -> User             [label="display summary"];
-
-    // spacer
-    FindMSCodeIDsCLI -> FindGaitCLI      [style=invis];
-
-    // find_gait flow
-    User -> FindGaitCLI        [label="run `python -m ms_monitoring.find_gait`"];
-    FindGaitCLI -> MovementDetector [label="__init__(ids, config)"];
-    MovementDetector -> DataManager  [label="segments_retrieval(ids)\nrecover_activity_all()"];
-    DataManager -> PostgreSQL        [label="SELECT * FROM activity_all"];
-    MovementDetector -> InfluxDB     [label="fetch_sensor_data(...)"];
-    InfluxDB -> MovementDetector     [label="raw DataFrame"];
-    MovementDetector -> DataManager  [label="store effective_movement & gait"];
-    DataManager -> PostgreSQL        [label="INSERT effective tables"];
-    MovementDetector -> FindGaitCLI  [label="return DataFrames"];
-    FindGaitCLI -> User              [label="print summaries"];
-  }
+    U->>C2: run `python -m ms_monitoring.find_gait`
+    C2->>M: __init__(ids, config)
+    M->>DM: segments_retrieval(ids)
+    DM->>PG: SELECT * FROM activity_all
+    M->>DB: fetch_sensor_data()
+    DB-->>M: raw DataFrame
+    M->>DM: store effective_movement & gait
+    DM->>PG: INSERT effective tables
+    M-->>C2: return DataFrames
+    C2-->>U: print summaries
 ```
 
 ## Requirements
