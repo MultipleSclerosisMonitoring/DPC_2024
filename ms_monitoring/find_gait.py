@@ -9,7 +9,7 @@ from msGait.movement_detector import MovementDetector
 
 class VAction(argparse.Action):
     """
-    Clase para manejar el nivel de verbose (-v).
+    Custom argparse Action to handle cumulative verbosity (-v).
     """
     def __call__(self, parser, namespace, values, option_string=None):
         if values is None:
@@ -18,34 +18,62 @@ class VAction(argparse.Action):
             setattr(namespace, self.dest, int(values))
 
 
-i18n.init_translation('es')  # Inicializa por defecto
-
-
 def main():
-    parser = argparse.ArgumentParser(description=i18n._("ARG_TIT_FIND_GAIT"))
-    parser.add_argument("-i", "--ids", dest="act_all_ids", type=json.loads, required=True,
-                        help=i18n._("ARG_LIST_ACT_ALL_IDS"))
-    # parser.add_argument("-f", "--from", dest="fstart", type=str, default=None,
-    #                     help=i18n._("ARG_STR_TIME_FROM"))
-    # parser.add_argument("-u", "--until", dest="fend", type=str, default=None,
-    #                     help=i18n._("ARG_STR_TIME_UNTIL"))
-    parser.add_argument("-c", "--config", dest="config_file", type=str, required=True,
-                        help=i18n._("ARG_STR_PATH_YAML"))
-    parser.add_argument("-l", "--lang", dest="lng", type=str, default="es",
-                        help=i18n._("ARG_STR_LNG"))
-    parser.add_argument("-o", "--output", dest="fout", type=str, default=None,
-                        help=i18n._("ARG_STR_FOUT"))
-    parser.add_argument("-v", "--verbose", action=VAction, nargs="?", default=0, const=1,
-                        help=i18n._("ARG_VB_LEVEL"))
-    parser.add_argument("--head-rows", dest="head_rows", type=int, default=8,
-                        help=i18n._("ARG_HEAD_ROWS"))
-    parser.add_argument("--save", dest="save", action="store_true", default=False,
-                        help="Guardar resultados en PostgreSQL")
-    args = parser.parse_args()
-    i18n.init_translation(args.lng)
-    
-    # Inicializar detector (gestiona internamente DataManager y recuperación de segmentos)
-    # Constructor flexible que puede funcionar por ids o por fechas
+    # 1) Pre‐parse only -l/--lang (to avoid showing help prematurely)
+    pre = argparse.ArgumentParser(add_help=False)
+    pre.add_argument(
+        "-l", "--lang", dest="lng", type=str, default="es",
+        help="Language: [en|es]"
+    )
+    pre_args, remaining = pre.parse_known_args()
+
+    # 2) Initialize translation using selected language
+    i18n.init_translation(pre_args.lng)
+    _ = i18n._
+
+    # 3) Build the real ArgumentParser, using _() for all user‐facing text
+    parser = argparse.ArgumentParser(
+        description=_("ARG_TIT_FIND_GAIT")
+    )
+    parser.add_argument(
+        "-i", "--ids", dest="act_all_ids", metavar="IDS", type=json.loads, required=True,
+        help=_("ARG_LIST_ACT_ALL_IDS")
+    )
+    parser.add_argument(
+        "-c", "--config", dest="config_file", type=str, required=True,
+        help=_("ARG_STR_PATH_YAML")
+    )
+    parser.add_argument(
+        "-l", "--lang", dest="lng", type=str, default=pre_args.lng,
+        help=_("ARG_STR_LNG")
+    )
+    parser.add_argument(
+        "-o", "--output", dest="fout", type=str, default=None,
+        help=_("ARG_STR_FOUT")
+    )
+    parser.add_argument(
+        "-v", "--verbose", action=VAction, nargs="?", default=0, const=1,
+        help=_("ARG_VB_LEVEL")
+    )
+    parser.add_argument(
+        "--head-rows", dest="head_rows", type=int, default=8,
+        help=_("ARG_HEAD_ROWS")
+    )
+    parser.add_argument(
+        "--save", dest="save", type=int, choices=[0,1], default=0,
+        help=_("ARG_SAVE")
+    )
+
+    # 4) Parse the remaining arguments
+    args = parser.parse_args(remaining)
+
+    # 5) If language was changed here, re‐initialize translation
+    if args.lng != pre_args.lng:
+        i18n.init_translation(args.lng)
+        _ = i18n._
+
+    # Initialize the MovementDetector (internally handles DataManager and segment retrieval)
+    # Supports either supplying IDs or date ranges
     detector = MovementDetector(
         config_file   = args.config_file,
         sampling_rate = 50,
@@ -55,53 +83,56 @@ def main():
         verbose       = args.verbose
     )
 
-    # Si no hay piernas, salimos
+    # If no leg data was retrieved, exit
     if detector.df_legs.empty:
         return
 
     if args.verbose >= 1:
-        print(i18n._("FGAIT_1ST"))
+        print(_("FGAIT_1ST"))
 
-    # Detectar marchas efectivas por pierna
-    df_effective = detector.detect_effective_movement(detector.df_legs,args.fout,args.verbose)
+    # Detect effective movements per leg
+    df_effective = detector.detect_effective_movement(
+        detector.df_legs,
+        args.fout,
+        args.verbose
+    )
     if df_effective.empty:
-        print(i18n._("FGAIT_NO_WALK"))
+        print(_("FGAIT_NO_WALK"))
         return
 
     if args.verbose >= 2:
-        print(i18n._("FGAIT_WKLS_FND"))
+        print(_("FGAIT_WKLS_FND"))
         print(df_effective.head(args.head_rows))
 
-    # Guardado o impresión de effective_movement
-    if args.save:
-        detector.save_to_postgresql("effective_movement", df_effective,args.verbose)
+    # Optionally save effective_movement to PostgreSQL
+    if args.save == 1:
+        detector.save_to_postgresql("effective_movement", df_effective, args.verbose)
         if args.verbose >= 1:
-            print(i18n._("FGAIT_NUM_WALKS").format(ns=len(df_effective)))
+            print(_("FGAIT_NUM_WALKS").format(ns=len(df_effective)))
 
-    # Detectar periodos de marcha efectiva simultánea (ambos pies)
-    df_gait = detector.detect_effective_gait(df_effective,args.verbose)
+    # Detect simultaneous effective gait periods (both feet)
+    df_gait = detector.detect_effective_gait(df_effective, args.verbose)
     if df_gait.empty:
         if args.verbose >= 1:
-            print("No se encontraron periodos de marcha efectiva simultánea.")
+            print(_("NO_GAIT_PERIODS"))
     else:
         if args.verbose >= 1:
-            print("Periodos de marcha efectiva simultánea (ambos pies):")
+            print(_("GAIT_PERIODS_HEADER"))
             if args.verbose >= 2:
+                # Indent the DataFrame for clearer display
                 df_string = df_gait.to_string(index=False)
-                indentation = "     "  # 5 spaces
-                # Divide la cadena en líneas, sangra cada línea y únelas de nuevo
-                indented_df_string = "\n".join([indentation + line for line in 
-                                                df_string.splitlines()])
-                print(indented_df_string)
+                indentation = "     "
+                indented = "\n".join(indentation + line for line in df_string.splitlines())
+                print(indented)
 
-        if args.save:
-            detector.save_to_postgresql("effective_gait", df_gait,args.verbose)
+        if args.save == 1:
+            detector.save_to_postgresql("effective_gait", df_gait, args.verbose)
             if args.verbose >= 1:
-                print(f"{len(df_gait)} registros de effective_gait guardados")
+                print(_("GAIT_SAVED_COUNT").format(n=len(df_gait)))
 
     if args.verbose >= 1:
-        print(i18n._("FGAIT_END"))
-    
+        print(_("FGAIT_END"))
+
     detector.close()
 
 

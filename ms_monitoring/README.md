@@ -1,3 +1,5 @@
+[← Project Home](../README.md)
+
 # ms_monitoring
 
 Command-line tools for extracting and processing wearable activity data
@@ -5,39 +7,13 @@ in multiple sclerosis monitoring studies.
 
 ## High-Level Workflow
 
-```mermaid
-sequenceDiagram
-    participant U as User
-    participant C1 as find_mscodeids CLI
-    participant P as CodeIDProcessor
-    participant DM as DataManager
-    participant DB as InfluxDB
-    participant PG as PostgreSQL
-    U->>C1: run `python -m ms_monitoring.find_mscodeids`
-    C1->>P: __init__(config)
-    P->>DM: get_codeids_in_range()
-    DM->>DB: query distinct CodeIDs
-    DM->>PG: INSERT activity_leg & activity_all
-    P-->>C1: print INFO_ALL_PROCESSED
-    C1-->>U: display summary
+### 1. find_mscodeids
 
-    %% spacer
-    C1--x C2: 
+![Sequence Diagram illustrating the find_mscodeids CLI flow](../static/find_mscodeids_flow.png)
 
-    participant C2 as find_gait CLI
-    participant M as MovementDetector
+### 2. find_gait
 
-    U->>C2: run `python -m ms_monitoring.find_gait`
-    C2->>M: __init__(ids, config)
-    M->>DM: segments_retrieval(ids)
-    DM->>PG: SELECT * FROM activity_all
-    M->>DB: fetch_sensor_data()
-    DB-->>M: raw DataFrame
-    M->>DM: store effective_movement & gait
-    DM->>PG: INSERT effective tables
-    M-->>C2: return DataFrames
-    C2-->>U: print summaries
-```
+![Sequence Diagram illustrating the find_gait CLI flow](../static/find_gait_flow.png)
 
 ## Requirements
 

@@ -1,16 +1,17 @@
 import argparse
 import pandas as pd
+import sys
+from datetime import datetime, timedelta
+
+from msTools import i18n
 from msTools.data_manager import DataManager
 from msCodeID.codeid_processor import CodeIDProcessor
-from datetime import datetime, timedelta
-import gettext
-import os
-import sys
 from msTools.timeutils import ensure_utc
+
 
 class VAction(argparse.Action):
     """
-    Clase para manejar el nivel de verbose (-v).
+    Custom argparse Action to handle cumulative verbosity (-v).
     """
     def __call__(self, parser, namespace, values, option_string=None):
         if values is None:
@@ -18,67 +19,65 @@ class VAction(argparse.Action):
         else:
             setattr(namespace, self.dest, int(values))
 
+
 def main():
-    # 1) Pre-parse para capturar sólo -l/--lang (sin generar help aún)
+    # 1) Pre-parse only -l/--lang (so we don’t show help in the wrong language yet)
     pre = argparse.ArgumentParser(add_help=False)
-    pre.add_argument("-l", "--lang", dest="lng", type=str, default="es",
-                     help="Language: [en|es]")
+    pre.add_argument(
+        "-l", "--lang", dest="lng", type=str, default="es",
+        help="Language: [en|es]"
+    )
     pre_args, remaining = pre.parse_known_args()
 
-    # 2) Inicializar la traducción con el idioma elegido
-    localedir = os.path.join(os.path.abspath(os.path.dirname(__file__)), 'locales')
-    lang_trans = gettext.translation('messages', localedir=localedir,
-                                     languages=[pre_args.lng], fallback=True)
-    lang_trans.install()
-    _ = lang_trans.gettext
+    # 2) Initialize translation with the chosen language
+    i18n.init_translation(pre_args.lng)
+    _ = i18n._
 
-    # 3) Ahora sí creamos el parser completo ya traducido
+    # 3) Build the fully localized ArgumentParser
     parser = argparse.ArgumentParser(
-        description=_("Find msCodeIDs and store activity windows into PostgreSQL.")
+        description=_("DESC_FIND_MSCodeIDs")
     )
-    # Volvemos a exponer -l/--lang para que el usuario pueda verlo en --help
-    parser.add_argument("-l", "--lang", dest="lng", type=str, default=pre_args.lng,
-                        help=_("Language: [en|es]"))
-    parser.add_argument("-f", "--from", dest="from_date", type=str, required=False,
-                        help=_("Start datetime (format: 'YYYY-MM-DD HH:MM:SS')."))
-    parser.add_argument("-u", "--until", dest="until_date", type=str, required=False,
-                        help=_("End datetime (format: 'YYYY-MM-DD HH:MM:SS')."))
-    parser.add_argument("-c", "--config", dest="config_file", type=str, required=True,
-                        help=_("Path to the configuration file (config.yaml)."))
-    parser.add_argument("-v", "--verbose", action=VAction, nargs="?", default=0, const=1,
-                        help=_("Verbosity level (0=Silent, 1=Basic, 2=Detailed)."))
-    parser.add_argument("--head-rows", dest="head_rows", type=int, default=5,
-                        help=_("ARG_HEAD_ROWS"))
+    parser.add_argument(
+        "-l", "--lang", dest="lng", type=str, default=pre_args.lng,
+        help=_("ARG_STR_LNG")
+    )
+    parser.add_argument(
+        "-f", "--from", dest="from_date", metavar="FROM_DATE",
+        type=str, required=False, help=_("ARG_STR_TIME_FROM")
+    )
+    parser.add_argument(
+        "-u", "--until", dest="until_date", metavar="UNTIL_DATE",
+        type=str, required=False, help=_("ARG_STR_TIME_UNTIL")
+    )
+    parser.add_argument(
+        "-c", "--config", dest="config_file", metavar="CONFIG_FILE",
+        type=str, required=True, help=_("ARG_STR_PATH_YAML")
+    )
+    parser.add_argument(
+        "-v", "--verbose", action=VAction, nargs="?", default=0, const=1,
+        help=_("ARG_VB_LEVEL")
+    )
+    parser.add_argument(
+        "--head-rows", dest="head_rows", type=int, default=5,
+        help=_("ARG_HEAD_ROWS")
+    )
 
     args = parser.parse_args(remaining)
 
-    # Si el usuario cambia -l en la 2ª fase, re-iniciar traducción:
+    # If the user changed -l here, re-initialize translation
     if args.lng != pre_args.lng:
-        lang_trans = gettext.translation('messages', localedir=localedir,
-                                         languages=[args.lng], fallback=True)
-        lang_trans.install()
-        _ = lang_trans.gettext
+        i18n.init_translation(args.lng)
+        _ = i18n._
 
-    # Inicialización del DataManager y CodeIDProcessor
+    # Initialize DataManager and CodeIDProcessor
     data_manager = DataManager(config_path=args.config_file)
     codeid_processor = CodeIDProcessor(data_manager)
 
-    # # Crear/verificar tablas en PostgreSQL
-    # if args.verbose >= 1:
-    #     print(_("Creating/verifying necessary tables..."))
-
-    # try:
-    #     data_manager.check_and_create_tables("msTools/create_tables.sql")
-    #     if args.verbose >= 1:
-    #         print(_("Tables verified and created if necessary."))
-    # except Exception as e:
-    #     print(_("Error verifying/creating tables: ") + str(e))
-    #     return
-
-    # Gestión de fechas usando ensure_utc()
+    # Handle dates using ensure_utc()
     if args.from_date:
         start_datetime = ensure_utc(args.from_date)
     else:
+        # default: midnight yesterday
         tmp = datetime.now() - timedelta(days=1)
         tmp = tmp.replace(hour=0, minute=0, second=0, microsecond=0)
         start_datetime = ensure_utc(tmp)
@@ -88,135 +87,145 @@ def main():
     else:
         end_datetime = ensure_utc(datetime.now())
 
+    # If end is before start, error and exit
     if end_datetime < start_datetime:
-        # Mensaje de error en stderr y salida con código 1
         sys.stderr.write(
-            _("Error: End date ({end}) is before start date ({start}).\n")
+            _("ERR_END_BEFORE_START")
             .format(end=end_datetime, start=start_datetime)
         )
         sys.exit(1)
 
+    # Verbose info about date range
     if args.verbose >= 1:
         print(
-            _("Getting msCodeIDs from {start} to {end}...")
+            _("MSG_GET_MSCodeIDs_RANGE")
             .format(
                 start=start_datetime.strftime('%Y-%m-%d %H:%M:%S'),
                 end=end_datetime.strftime('%Y-%m-%d %H:%M:%S')
             )
         )
-    
-    # Obtener CodeIDs en el rango de fechas
+
+    # Fetch CodeIDs in the given date range
     codeids = data_manager.get_codeids_in_range(
         start_datetime.strftime("%Y-%m-%d %H:%M:%S"),
         end_datetime.strftime("%Y-%m-%d %H:%M:%S")
     )
     if not codeids:
-        print(_("No CodeIDs found."))
-        return None
+        print(_("MSG_NO_CODEIDS_FOUND"))
+        return
 
     if args.verbose >= 1:
-        print(_("Found {n} different CodeIDs from {start} to {end}.").format(
-            n=len(codeids), start=args.from_date, end=args.until_date))
-    
-    if args.verbose >= 3:
-        print(_("LBL_LIST_CODEIDS"))
-        print(_("List of CodeIDs:"))
-        for cid in codeids:
-            print(f"  - {cid}")
+        print(_("MSG_FOUND_N_CODEIDS").format(
+            n=len(codeids),
+            start=args.from_date or start_datetime,
+            end=args.until_date or end_datetime
+        ))
 
-    # Procesar CodeIDs
+    if args.verbose >= 3:
+        print(_("LBL_CODEIDS_HEADER"))
+        for cid in codeids:
+            print(_("LIST_ITEM_CODEID").format(cid=cid))
+
+    # Process each CodeID
     for codeid in codeids:
         if args.verbose >= 1:
-            print(_("Processing data for CodeID: {codeid}...").format(codeid=codeid))
+            print(_("MSG_PROCESSING_CODEID").format(codeid=codeid))
 
-        # Guardar el CodeID en la base de datos y obtener su ID
+        # Store the CodeID in PostgreSQL and get its internal ID
         try:
             codeid_id, is_new = data_manager.store_codeid(codeid, args.verbose)
         except Exception as e:
-            print(_("Error storing CodeID {codeid}: {error}").format(codeid=codeid, error=str(e)))
+            print(_("ERR_STORING_CODEID").format(codeid=codeid, error=str(e)))
             continue
 
-        # Obtener datos del CodeID desde InfluxDB
+        # Fetch sensor data for this CodeID
         try:
             sensor_data = codeid_processor.fetch_codeid_data(
                 codeid, start_datetime, end_datetime
-                )
+            )
         except Exception as e:
-            print(_("Error fetching data for CodeID {codeid}: {error}").format(codeid=codeid, error=str(e)))
+            print(_("ERR_FETCH_DATA").format(codeid=codeid, error=str(e)))
             continue
 
         if sensor_data.empty:
             if args.verbose >= 1:
-                print(_("No data found for CodeID: {codeid}.").format(codeid=codeid))
+                print(_("MSG_NO_DATA_FOR_CODEID").format(codeid=codeid))
             continue
 
-        # Robust foot‐column check: fail if it's missing
+        # Robust check: ensure 'Foot' column is present
         if 'Foot' not in sensor_data.columns:
-            sys.stderr.write(_(f"Critical error: 'Foot' field missing in sensor data for CodeID: {codeid}.").format(codeid=codeid))
+            print(_("ERR_FOOT_MISSING").format(codeid=codeid), file=sys.stderr)
             continue
-        # Identificar segmentos de actividad distancia 80seg 
+
+        # Identify activity segments with an 80-second gap threshold
         try:
-            activity_segL = codeid_processor.identify_activity_segments(\
-                                sensor_data,80,'Left')
-            activity_segR = codeid_processor.identify_activity_segments(\
-                                sensor_data,80,'Right')
-            # ———————— ELIMINAR SEGMENTOS DE DURACIÓN CERO ————————
+            activity_segL = codeid_processor.identify_activity_segments(
+                sensor_data, 80, 'Left'
+            )
+            activity_segR = codeid_processor.identify_activity_segments(
+                sensor_data, 80, 'Right'
+            )
+
+            # ——— Remove zero-duration segments ———
             if not activity_segL.empty:
                 activity_segL = activity_segL.loc[
-                    (activity_segL['time_until'] - activity_segL['time_from']).dt.total_seconds() > 0
+                    (activity_segL['time_until'] - activity_segL['time_from'])\
+                        .dt.total_seconds() > 0
                 ]
-
             if not activity_segR.empty:
                 activity_segR = activity_segR.loc[
-                    (activity_segR['time_until'] - activity_segR['time_from']).dt.total_seconds() > 0
+                    (activity_segR['time_until'] - activity_segR['time_from'])\
+                        .dt.total_seconds() > 0
                 ]
-            # ————————————————————————————————————————————————
-            # Preparing and accomodating data for postgresql table
+
+            # Prepare and transform for PostgreSQL
             if activity_segL.empty:
                 if args.verbose >= 1:
-                    print(_("No activity segments identified for CodeID: {codeid}, foot: Left.").format(codeid=codeid))
+                    print(_("WARN_NO_SEGMENTS_LEG").format(codeid=codeid, foot='Left'))
             else:
                 activity_refL = data_manager.transform_activityleg(activity_segL)
-            
+
             if activity_segR.empty:
                 if args.verbose >= 1:
-                    print(_("No activity segments identified for CodeID: {codeid}, foot: Right.").format(codeid=codeid))
+                    print(_("WARN_NO_SEGMENTS_LEG").format(codeid=codeid, foot='Right'))
             else:
                 activity_refR = data_manager.transform_activityleg(activity_segR)
-            # Storing data
+
+            # Store activity_leg segments
             if not activity_segL.empty:
                 ids = data_manager.store_data("activity_leg", activity_refL)
                 activity_segL['codeleg_id'] = ids
                 if args.verbose >= 2:
-                    print(_("Activity segments processed and stored ({n} rows):").format(n=len(activity_refL)))
+                    print(_("INFO_SEGMENTS_STORED").format(n=len(activity_refL)))
                     print(activity_segL.head(args.head_rows))
 
             if not activity_segR.empty:
                 ids = data_manager.store_data("activity_leg", activity_refR)
                 activity_segR['codeleg_id'] = ids
                 if args.verbose >= 2:
-                    print(_("Activity segments processed and stored ({n} rows):").format(n=len(activity_refR)))
+                    print(_("INFO_SEGMENTS_STORED").format(n=len(activity_refR)))
                     print(activity_segR.head(args.head_rows))
 
-            # Generamos la intersección de las dos piernas
-            # Key aspect in hierarchical information structure
-            res = codeid_processor.inter_segs(activity_segR,activity_segL)
-            if not res.empty:
-                dbrg= codeid_processor.merge_activity_legs_to_all(activity_segR,\
-                        activity_segL,res)
-                data_manager.store_data("activity_all",dbrg)
+            # Compute intersection between left/right segments
+            intersections = codeid_processor.inter_segs(activity_segR, activity_segL)
+            if not intersections.empty:
+                merged = codeid_processor.merge_activity_legs_to_all(
+                    activity_segR, activity_segL, intersections
+                )
+                data_manager.store_data("activity_all", merged)
                 if args.verbose >= 2:
-                    print(_("Final merged segments stored ({n} rows):").format(n=len(dbrg)))
-                    print(dbrg.head(args.head_rows))
+                    print(_("INFO_MERGED_STORED").format(n=len(merged)))
+                    print(merged.head(args.head_rows))
+
         except Exception as e:
-            print(_("Error processing activity segments for CodeID {codeid}: {error}").format(
-                codeid=codeid, error=str(e)))
-    #
+            print(_("ERR_PROCESS_SEGMENTS").format(codeid=codeid, error=str(e)))
+
+    # Final summary
     if args.verbose >= 1:
-        print(_("All CodeIDs processed successfully."))
-    #
+        print(_("INFO_ALL_PROCESSED"))
+
     del data_manager
-    return None
+    return
 
 
 if __name__ == "__main__":
