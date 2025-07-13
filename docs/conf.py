@@ -12,7 +12,7 @@ sys.path.insert(0, os.path.abspath('..'))
 project = 'MS Monitoring'
 copyright = '2025, Diego Parrilla Calderón & Joaquín Ordieres-Meré'
 author = 'Diego Parrilla Calderón & Joaquín Ordieres-Meré'
-release = '0.1.0'   # debe coincidir con la versión en pyproject.toml
+release = '0.1.0'   # must match the version in pyproject.toml
 
 # -- General configuration ---------------------------------------------------
 
@@ -53,9 +53,15 @@ autodoc_default_options = {
     'private-members': True,
 }
 
-language = 'es'
+language = 'en'
 
 # -- Options for HTML output -------------------------------------------------
 
 html_theme = 'sphinx_rtd_theme'
 html_static_path = ['_static']
+
+rst_epilog = """
+.. |a| unicode:: U+007C a U+007C
+.. |g| unicode:: U+007C g U+007C
+"""
+

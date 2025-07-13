@@ -1,27 +1,41 @@
-.. MS_Activity_Movement documentation master file, created by
-   sphinx-quickstart on Sun Jan 26 12:08:23 2025.
-   You can adapt this file completely to your liking, but it should at least
-   contain the root `toctree` directive.
+.. MS Monitoring documentation master file
 
-MS_Activity_Movement documentation
-==================================
+MS Monitoring Documentation
+===========================
 
-Add your content using ``reStructuredText`` syntax. See the
-`reStructuredText <https://www.sphinx-doc.org/en/master/usage/restructuredtext/index.html>`_
-documentation for details.
+Welcome to the **MS Monitoring** documentation. This guide covers installation, usage, and the architecture of each module in the `ms_monitoring` project.
 
+.. graphviz::
+   :caption: High-Level Workflow Overview
+   :align: center
+
+   digraph overview {
+      rankdir=LR;
+      graph [fontname="Helvetica"];
+      node  [shape=box, fontname="Helvetica"];
+      edge  [fontname="Helvetica"];
+
+      FindMSCodeIDs   [label="find_mscodeids CLI"];
+      IdentifySegs    [label="CodeIDProcessor\n.identify_activity_segments()"];
+      DetectMovement  [label="find_gait CLI\n(MovementDetector.detect_effective_movement())"];
+      DetectGait      [label="find_gait CLI\n(MovementDetector.detect_effective_gait())"];
+
+      FindMSCodeIDs -> IdentifySegs -> DetectMovement -> DetectGait;
+   }
+
+Contents
+--------
 
 .. toctree::
    :maxdepth: 2
-   :caption: Contents:
+   :caption: Sections:
 
    usage
    modules
 
-Indices and tables
-==================
+Indices and Tables
+------------------
 
 * :ref:`genindex`
 * :ref:`modindex`
 * :ref:`search`
-
