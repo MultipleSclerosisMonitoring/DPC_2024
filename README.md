@@ -1,147 +1,123 @@
+[![Build Status](https://img.shields.io/github/actions/workflow/status/MultipleSclerosisMonitoring/DPC_2024/ci.yml?branch=main)](https://github.com/MultipleSclerosisMonitoring/DPC_2024/actions)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+
 # MS Monitoring
 
-TFG Diego Parrilla Calderón
+Modular Python utilities for monitoring wearable devices  
+in multiple sclerosis studies.
 
-**MS Monitoring** (`ms_monitoring`) es una colección modular de utilidades en Python para la monitorización de dispositivos wearables (Sensoria, HealthyWear) en estudios de esclerosis múltiple. El proyecto está organizado en cuatro componentes principales (un repositorio y tres paquetes de python):
+---  
+## Table of Contents
 
-- **ms_monitoring**: Scripts CLI para flujo completo de análisis 
-      (extracción de CodeIDs, segmentos de actividad, detección de marchas efectivas).
-- **msTools**: *(Paquete python)* Biblioteca de utilidades compartidas 
-      (gestión de base de datos, I18N, modelos de datos, utilidades de tiempo).
-- **msCodeID**: *(Paquete python)* Procesamiento de CodeIDs: extracción de datos de InfluxDB y almacenamiento en PostgreSQL de segmentos de actividad.
-- **msGait**: *(Paquete python)* Procesamiento de señal de marcha: detección de segmentos, clasificación y análisis de marchas efectivas.
+1. [High-Level Workflow](#high-level-workflow)  
+2. [Quickstart](#quickstart)  
+3. [Installation](#installation)  
+4. [Configuration](#configuration)  
+5. [Documentation](#documentation)  
+6. [Contributing](#contributing)  
+7. [License](#license)
 
 ---
 
-## Estructura de directorios
+## High-Level Workflow
+
+### 1. find_mscodeids
+
+Extracts unique device CodeIDs, identifies activity segments,  
+and persists them to PostgreSQL.
+
+![Sequence Diagram for find_mscodeids](./static/find_mscodeids_flow.png)
+
+### 2. find_gait
+
+Processes stored activity segments, applies power/time-based checks  
+to detect effective movements and gait episodes.
+
+![Sequence Diagram for find_gait](./static/find_gait_flow.png)
+
+## Directory Structure
 
 ```
-root
-├── .gitignore
-├── config.yaml               # Template configuración de InfluxDB y PostgreSQL
-├── ids.json
-├── LICENSE
-├── pyproject.toml            # configuración Poetry
-├── poetry.lock
-├── pyproject.txt             # configuración PEP 621
-├── README.md                 # este archivo
+.
+├── config.yaml           # Template for InfluxDB & PostgreSQL
 ├── requirements.txt
-├── docs/                     # Documentación Sphinx
-├── locales/                  # Archivos de traducción (es/en)
-├── msTools/                  # Utilidades compartidas
-├── msCodeID/                 # Procesador de CodeIDs
-├── msGait/                   # Análisis de señal de marcha
-├── ms_monitoring/            # Scripts CLI
-└── outs/
+├── docs/                 # Sphinx documentation
+├── static/               # CLI workflow diagrams
+├── msTools/              # Shared utilities package
+├── msCodeID/             # CodeID processing package
+├── msGait/               # Gait signal processing package
+├── ms_monitoring/        # CLI entry-point scripts
+└── README.md             # This file
 ```
 
----
+## Installation
 
-## Requisitos
-
-- Python 3.12+  
-- **Poetry** (recomendado) o `pip`  
-- Dependencias listadas en `pyproject.toml` 
-
----
-
-## Instalación
-
-### Con Poetry
+### With Poetry
 
 ```bash
-# Instalar Poetry si no lo tienes
 curl -sSL https://install.python-poetry.org | python3 -
-
-# Clonar repositorio
 git clone https://github.com/MultipleSclerosisMonitoring/DPC_2024.git
 cd DPC_2024
-
-# Instalar dependencias y activar entorno
 poetry install
 poetry shell
-
-# Generar artefactos y construir paquete
-poetry build
-pip install dist/ms_monitoring-0.1.0-py3-none-any.whl
 ```
 
-### Con pip
+### With pip
 
 ```bash
-# Crear y activar entorno virtual
 python -m venv venv
-source venv/bin/activate  # o venv\Scripts\activate en Windows
-
-# Instalar dependencias
+source venv/bin/activate          # On Windows: venv\Scripts\activate
 pip install -r requirements.txt
-
-# (Opcional) Construir wheel
-pip wheel . --no-deps -w dist
-pip install dist/ms_monitoring-0.1.0-py3-none-any.whl
 ```
 
----
+## Configuration
 
-## Configuración
-
-Edite `.config.yaml` con los datos de sus servidores. Dispone de un template en `config.yaml` :
+Copy or edit `config.yaml` in the project root:
 
 ```yaml
 influxdb:
-  url: "https://<host>:8086"
-  token: "<TOKEN>"
-  org: "<ORGANIZATION>"
-  bucket: "<BUCKET>"
+  url:         "https://<HOST>:8086"
+  token:       "<YOUR_TOKEN>"
+  org:         "<ORG>"
+  bucket:      "<BUCKET>"
   measurement: "<MEASUREMENT>"
-  verify: false
-  timeout: 900000
+  verify:      false
+  timeout:     900000
 
 postgresql:
-  host: "<PG_HOST>"
-  port: 5432
-  user: "<USER>"
+  host:     "<PG_HOST>"
+  port:     5432
+  user:     "<USER>"
   password: "<PASSWORD>"
   database: "<DB_NAME>"
 
 movement:
-  # Umbral para el módulo de aceleración (is_effective_by_time)
-  accel_threshold: 0.2
-  # Umbral para el módulo de giroscopio (is_effective_by_time)
-  gyro_threshold: 0.2
-  # Threshold de potencia en la banda de frecuencia
-  power_threshold: 0.5
-  # Banda de frecuencia para Welch (Hz)
-  freq_band_min: 0.4
-  freq_band_max: 1.4
-  # Segundos mínimos continuos sobre el umbral para considerar actividad
+  accel_threshold:      0.2
+  gyro_threshold:       0.2
+  power_threshold:      0.5
+  freq_band_min:        0.4
+  freq_band_max:        1.4
   min_continuous_seconds: 10
 ```
 
----
+## Documentation
 
-## Documentación
-
-La documentación completa está en `docs/`. Para generarla:
+Full Sphinx docs are in `docs/`. To rebuild locally:
 
 ```bash
 cd docs
 make html
 ```
 
-Luego abra `_build/html/index.html`.
+Open `_build/html/index.html` in your browser.
 
----
+## Contributing
 
-## Desarrollo y Contribuciones
+1. Fork the repo  
+2. Create a branch: `git checkout -b feature/your-feature`  
+3. Make your changes & tests  
+4. Open a Pull Request
 
-1. Fork del repositorio.  
-2. Crear branch: `git checkout -b feature/nombre`.  
-3. Realizar cambios y tests.  
-4. Crear pull request.
+## License
 
----
-
-## Licencia
-
-Este proyecto usa la licencia [MIT](LICENSE).  
+This project is licensed under the **MIT License**. See [LICENSE](LICENSE) for details.
