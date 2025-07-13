@@ -1,90 +1,90 @@
 # msCodeID
 
-msCodeID es un módulo en Python dedicado al procesamiento de identificadores de dispositivo (*CodeIDs*) obtenidos de wearables. Proporciona funcionalidades para:
+Python module for processing wearable device CodeIDs.
 
-- **Extracción** de datos de sensores desde InfluxDB.
-- **Identificación** de segmentos de actividad basados en umbrales de tiempo.
-- **Preparación** de datos para su almacenamiento en PostgreSQL.
+## Architecture Overview
 
-## Requisitos
+![Class Diagram: CodeIDProcessor ↔ DataManager](../static/class_msCodeID.png)
 
-- Python **3.12+**
-- Dependencias instaladas en el proyecto principal:
+*Class Diagram: `CodeIDProcessor` and its connection to `DataManager`*
+
+The **msCodeID** package centers on the `CodeIDProcessor` class, which orchestrates fetching raw sensor data, identifying activity segments, and preparing them for database storage.
+
+## Core Components
+
+- **CodeIDProcessor** (`codeid_processor.py`)
+  - `__init__(data_manager: DataManager)`
+  - `fetch_codeid_data(codeid: str, start_datetime: str, end_datetime: str) -> pandas.DataFrame`
+  - `identify_activity_segments(df: pandas.DataFrame, threshold_seconds: float, foot: str) -> pandas.DataFrame`
+  - `inter_segs(sg1: pandas.DataFrame, sg2: pandas.DataFrame) -> pandas.DataFrame`
+  - `merge_activity_legs_to_all(act_segR: pandas.DataFrame, act_segL: pandas.DataFrame, inter: pandas.DataFrame) -> pandas.DataFrame`
+  - `save_to_postgresql(table_name: str, df: pandas.DataFrame) -> None`
+
+- **Pydantic Models** (`msGait.models`):
+  - `ActivitySegment`
+
+## Requirements
+
+- Python 3.12 or higher
+- Dependencies (installed via project):
   - `influxdb-client>=1.35.0`
   - `pandas>=2.0.0`
-  - `pydantic`
-  - `PyYAML`
+  - `pydantic>=1.10.0`
+  - `PyYAML>=6.0`
 
-## Instalación
+## Configuration
 
-El módulo se instala como parte del paquete principal **ms_monitoring**:
-
-```bash
-# Desde el repositorio raíz o tras publicar en PyPI
-pip install ms_monitoring
-```
-
-## Configuración
-
-La conexión a InfluxDB se gestiona a través de `config.yaml`. Asegúrate de definir la sección `influxdb` con los siguientes parámetros:
+Reads InfluxDB settings from `config.yaml`:
 
 ```yaml
 influxdb:
   org: 'UPM'
   bucket: 'Gait/autogen'
   measurement: 'Gait'
-  url: "https://apiivm78.etsii.upm.es:8086"
-  token: '<TU_TOKEN>'
+  url: "https://<HOST>:8086"
+  token: "<YOUR_TOKEN>"
   verify: false
   timeout: 900000
 ```
 
-## Uso en Python
-
-Puedes usar directamente la clase `CodeIDProcessor` desde tu código:
+## Usage in Python
 
 ```python
 from msTools.data_manager import DataManager
 from msCodeID.codeid_processor import CodeIDProcessor
 
-# Inicializar el gestor de datos
 dm = DataManager(config_path="config.yaml")
 processor = CodeIDProcessor(dm)
 
-# Recuperar datos de un CodeID en un rango de fechas
 df = processor.fetch_codeid_data(
     codeid="DEVICE123",
     start_datetime="2024-01-01 00:00:00",
     end_datetime="2024-01-02 00:00:00"
 )
-
 print(df.head())
 ```
 
-## Uso en línea de comandos
+## CLI Integration
 
-Aunque **msCodeID** no expone un CLI directo, se integra con el script principal `find_mscodeids` del paquete:
+While **msCodeID** does not expose its own CLI, it is used within the `find_mscodeids` script:
 
 ```bash
-python -m ms_monitoring.find_mscodeids   -c config.yaml   -f "2024-01-01 00:00:00"   -u "2024-01-02 00:00:00"   -v 1
+python -m ms_monitoring.find_mscodeids -c config.yaml -f "2024-01-01 00:00:00" -u "2024-01-02 00:00:00" -v 1
 ```
 
-Este comando:
-1. Extrae los `CodeID` únicos en el rango especificado.
-2. Identifica y almacena ventanas de actividad en PostgreSQL.
+## File Structure
 
-## Estructura de ficheros
-
-- `codeid_processor.py`: Clase principal `CodeIDProcessor`.
+- `codeid_processor.py`: Main processing class.
 - `__init__.py`
 
-## Contribuciones
+## Contributing
 
-Las contribuciones son bienvenidas. Para proponer cambios:
-1. Haz un **fork** del repositorio.
-2. Crea una rama: `git checkout -b feature/mi-mejora`.
-3. Realiza tus cambios y envía un **pull request**.
+Contributions are welcome:
 
-## Licencia
+1. Fork the repository.
+2. Create a branch: `git checkout -b feature/your-feature`.
+3. Make changes and open a pull request.
 
-Proyecto bajo licencia **MIT**. Consulta el archivo `LICENSE` en la raíz del repositorio.
+## License
+
+MIT License. See the root `LICENSE` file for details.
