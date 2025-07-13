@@ -4,6 +4,7 @@ import psycopg2
 import yaml
 from msTools.models import CodeID, ActivityLeg, ActivityAll
 from msTools import i18n
+from msTools.timeutils import ensure_utc
 from msGait.models import EffectiveMovement, ActivitySegment
 from pydantic import ValidationError
 from typing import List, Dict, Optional, Tuple
@@ -12,19 +13,19 @@ import datetime
 
 
 class DataManager:
-    def __init__(self, config_path: str)->None:
+    def __init__(self, config_path: str) -> None:
         """
-        Inicializa el DataManager con las conexiones a InfluxDB y PostgreSQL.
-        
-        :param config_path: Ruta del archivo YAML con la configuración.
+        Initializes the DataManager with connections to InfluxDB and PostgreSQL.
+
+        :param config_path: Path to the YAML configuration file.
         :type config_path: str
         """
         self.config = self.load_config(config_path)
 
-        # Configurar PostgreSQL
+        # Configure PostgreSQL connection
         self.pg_conn = self._connect_postgresql()
 
-        # Configurar InfluxDB
+        # Configure InfluxDB client
         self.influxdb_client = InfluxDBClient(
             url=self.config["influxdb"]["url"],
             token=self.config["influxdb"]["token"],
@@ -35,16 +36,17 @@ class DataManager:
         self.measurement: str = self.config['influxdb']['measurement']
 
     def __del__(self)-> None:
+        """Ensure all connections are closed on deletion."""
         self.close_influxdb()
         self.close_pg()
 
     def load_config(self, config_path: str) -> Dict:
         """
-        Carga la configuración desde un archivo YAML.
+        Loads configuration from a YAML file.
 
-        :param config_path: Ruta al archivo YAML.
+        :param config_path: Path to the YAML file.
         :type config_path: str
-        :return: Diccionario con la configuración.
+        :return: Configuration dictionary.
         :rtype: dict
         """
         with open(config_path, "r", encoding="utf-8") as file:
@@ -66,10 +68,10 @@ class DataManager:
 
     def _connect_postgresql(self) -> psycopg2.extensions.connection:
         """
-        Establece una conexión con PostgreSQL.
+        Establishes a connection to PostgreSQL.
 
-        :return: Objeto de conexión de PostgreSQL.
-        :rtype: object
+        :return: psycopg2 connection object.
+        :rtype: psycopg2.extensions.connection
         """
         try:
             return psycopg2.connect(
@@ -83,35 +85,38 @@ class DataManager:
             raise
 
     def close_pg(self) -> None:
+        """Closes the PostgreSQL connection."""
         self.pg_conn.close()
 
     def close_influxdb(self) -> None:
+        """Closes the InfluxDB client."""
         self.influxdb_client.close()
 
     def close_all(self) -> None:
+        """Closes both PostgreSQL and InfluxDB connections."""
         self.pg_conn.close()
         self.influxdb_client.close()
 
     def get_influx_client(self) -> InfluxDBClient:
         """
-        Devuelve el cliente de InfluxDB.
-        
-        :return: Objeto cliente de InfluxDB.
-        :rtype: object
+        Returns the InfluxDB client instance.
+
+        :return: InfluxDBClient object.
+        :rtype: InfluxDBClient
         """
         return self.influxdb_client
 
     def check_and_create_tables(self, sql_file_path: str) -> None:
         """
-        Comprueba si las tablas necesarias existen en PostgreSQL y las crea si no existen.
+        Checks if required tables exist in PostgreSQL and creates them if missing.
 
-        :param sql_file_path: Ruta al archivo SQL con las definiciones de las tablas.
+        :param sql_file_path: Path to the SQL file defining the tables.
         :type sql_file_path: str
         """
         try:
             required_tables = [
                 "codeids", "effective_movement", "activity_leg", "activity_all"
-            ]  # Tablas actualizadas
+            ] 
 
             with self.pg_conn.cursor() as cursor:
                 for table_name in required_tables:
@@ -123,13 +128,13 @@ class DataManager:
                     """)
                     exists = cursor.fetchone()[0]
                     if not exists:
-                        print(f"Creando tabla '{table_name}' desde {sql_file_path}...")
+                        print(i18n._("INFO_CREATE_TABLE").format(table=table_name, file=sql_file_path))
                         with open(sql_file_path, "r", encoding="utf-8") as sql_file:
                             sql_script = sql_file.read()
                             cursor.execute(sql_script)
                             self.pg_conn.commit()
                     else:
-                        print(f"Tabla '{table_name}' ya existe.")
+                        print(i18n._("INFO_TABLE_EXISTS").format(table=table_name))
         except Exception as e:
             self.pg_conn.rollback()
             print(i18n._("PGSQL-TAB-ERR").format(e=e))
@@ -137,36 +142,34 @@ class DataManager:
 
     def get_codeids_in_range(self, start_datetime: str, end_datetime: str) -> List[str]:
         """
-        Obtiene los CodeIDs únicos en un rango de fechas desde InfluxDB.
-        
-        :param start_datetime: Fecha y hora de inicio en formato string.
-        :param end_datetime: Fecha y hora de fin en formato string.
-        :return: Lista de CodeIDs únicos.
+        Retrieves unique CodeIDs from InfluxDB within a time range.
+
+        :param start_datetime: Start datetime in string format.
+        :param end_datetime: End datetime in string format.
+        :return: List of unique CodeIDs.
         :rtype: list[str]
         """
         try:
-            # Verificar zona horaria antes de localización/conversión
-            start_datetime = pd.to_datetime(start_datetime)
-            if start_datetime.tzinfo is None:
-                start_datetime = start_datetime.tz_localize("UTC")
-            start_datetime = start_datetime.tz_convert("UTC").isoformat().replace("+00:00", "Z")
+            # 1) Normalize both endpoints to UTC
+            start = ensure_utc(start_datetime)
+            end   = ensure_utc(end_datetime)
 
-            end_datetime = pd.to_datetime(end_datetime)
-            if end_datetime.tzinfo is None:
-                end_datetime = end_datetime.tz_localize("UTC")
-            end_datetime = end_datetime.tz_convert("UTC").isoformat().replace("+00:00", "Z")
+            # 2) Flux wants RFC3339 without "+00:00"
+            start_iso = start.isoformat().replace("+00:00", "Z")
+            end_iso   = end.isoformat()  .replace("+00:00", "Z")
 
             query = f'''
             from(bucket: "{self.bucket}")
-                |> range(start: {start_datetime}, stop: {end_datetime})
+                |> range(start: {start_iso}, stop: {end_iso})
                 |> filter(fn: (r) => r._measurement == "{self.measurement}")
                 |> keep(columns: ["CodeID"])
                 |> distinct()
             '''
-            
-            query_api = self.influxdb_client.query_api()
-            result = query_api.query(query, org=self.config['influxdb']['org'])
-            return [record['CodeID'] for table in result for record in table.records]
+            result = self.influxdb_client.query_api().query(
+                query, org=self.config['influxdb']['org']
+            )
+            return [rec['CodeID'] for table in result for rec in table.records]
+
         except Exception as e:
             print(i18n._("INFL-QRY-COD-ERR").format(e=e))
             return []
@@ -174,17 +177,17 @@ class DataManager:
 
     def fetch_data(self, query: str) -> pd.DataFrame:
         """
-        Ejecuta una consulta SQL en PostgreSQL y devuelve los resultados como un DataFrame.
+        Executes a SQL query in PostgreSQL and returns a DataFrame.
 
-        :param query: Consulta SQL a ejecutar.
-        :return: DataFrame con los resultados de la consulta.
+        :param query: SQL query string.
+        :return: DataFrame with query results.
         :rtype: pd.DataFrame
         """
         try:
             with self.pg_conn.cursor() as cursor:
                 cursor.execute(query)
-                columns = [desc[0] for desc in cursor.description]  # Obtener nombres de columnas
-                data = cursor.fetchall()  # Obtener datos
+                columns = [desc[0] for desc in cursor.description] 
+                data = cursor.fetchall() 
                 return pd.DataFrame(data, columns=columns)
         except Exception as e:
             print(i18n._("PGSQL-QRY-GEN-ERR").format(e=e))
@@ -198,20 +201,19 @@ class DataManager:
         verbose: int = 0
     ) -> pd.DataFrame:
         """
-        Recupera los registros de `activity_all`:
-        - Si se pasa `ids`, devuelve solo esos IDs.
-        - Si no, usa el rango de tiempo [fstart, fend].
-        :param fstart: fecha/hora inicio (si no se pasan ids)
-        :param fend:  fecha/hora fin   (si no se pasan ids)
-        :param ids:   lista de IDs de activity_all
-        :param verbose: nivel de verbosidad
-        :return: DataFrame con las columnas
-                 ['id','start_time','end_time','duration',
-                  'codeid_ids','codeleg_ids','active_legs']
+        Retrieves records from `activity_all` by IDs or by time window.
+
+        :param fstart: start datetime (if no ids provided)
+        :param fend: end datetime (if no ids provided)
+        :param ids: list of activity_all IDs
+        :param verbose: verbosity level
+        :return: DataFrame with columns 
+                ['id', 'start_time', 'end_time', 'duration',
+                'codeid_ids', 'codeleg_ids', 'active_legs']
         """
         if ids is not None:
             if verbose >= 1:
-                print(f"[DataManager] Recuperando segmentos por IDs: {ids}")
+                print(i18n._("INFO_SEGMENTS_BY_IDS").format(ids=ids))
             ids_str = ", ".join(map(str, ids))
             query = (
                 "SELECT id, start_time, end_time, duration, "
@@ -221,9 +223,9 @@ class DataManager:
             )
         else:
             if not fstart or not fend:
-                raise ValueError("Debe especificar `ids` o la ventana `fstart`/`fend`.")
+                raise ValueError(i18n._("ERR_MISSING_IDS_OR_WINDOW"))
             if verbose >= 1:
-                print(f"[DataManager] Recuperando segmentos entre {fstart} y {fend}")
+                print(i18n._("INFO_SEGMENTS_BY_RANGE").format(start=fstart, end=fend))
             query = (
                 "SELECT id, start_time, end_time, duration, "
                 "codeid_ids, codeleg_ids, active_legs "
@@ -235,7 +237,7 @@ class DataManager:
 
         df = self.fetch_data(query)
         if df.empty and verbose >= 1:
-            print("[DataManager] No se encontraron segmentos.")
+            print(i18n._("WARN_NO_SEGMENTS_FOUND"))
         else:
             # Due to the lack of TZ info we must change 
             for col in df.columns:
@@ -277,18 +279,16 @@ class DataManager:
 
     def store_codeid(self, codeid: str, verbose: int = 0) -> Tuple[int, bool]:
         """
-        Almacena un CodeID único en la tabla codeids y devuelve su ID.
+        Stores a unique CodeID in the `codeids` table and returns its ID.
 
-        :param codeid: El CodeID a almacenar.
-        :return: ID del CodeID en la tabla.
-        :rtype: int
+        :param codeid: the CodeID string to store.
+        :return: tuple of (id, is_new_flag).
+        :rtype: (int, bool)
         """
         try:
-            # Validar el CodeID usando Pydantic
             validated_codeid = CodeID(codeid=codeid)
 
             with self.pg_conn.cursor() as cursor:
-                # Intentar insertar el codeid
                 cursor.execute(
                     "INSERT INTO codeids (codeid) VALUES (%s) ON CONFLICT (codeid) DO NOTHING RETURNING id;",
                     (validated_codeid.codeid,)
@@ -298,16 +298,15 @@ class DataManager:
                     new_id = result[0]
                     self.pg_conn.commit()
                     if verbose >= 2:
-                        print(f"CodeID {codeid} ➞ nuevo, id = {new_id}")
+                        print(i18n._("INFO_CODEID_NEW").format(codeid=codeid, id=new_id))
                     return new_id, True
-                # Si ya existe, buscar el ID
+                
                 cursor.execute("SELECT id FROM codeids WHERE codeid = %s;", (validated_codeid.codeid,))
                 if verbose >= 2:
-                    print(f"CodeID {codeid} ➞ existente, id = {existing_id}")
+                    print(i18n._("INFO_CODEID_EXIST").format(codeid=codeid, id=existing_id))
                 existing_id = cursor.fetchone()[0]
                 return existing_id, False
         except ValidationError as e:
-            # print()
             print(i18n._("PGSQL-VAL-COD-ERR").format(e=e))
             raise
         except Exception as e:
@@ -335,9 +334,8 @@ class DataManager:
             :rtype: int
             """        
             with self.pg_conn.cursor() as cursor:
-                # Si ya existe, buscar el ID
                 cursor.execute("SELECT id FROM codeids WHERE codeid = %s;", (codeid,))
-                return cursor.fetchone()[0]  # Devuelve el ID existente
+                return cursor.fetchone()[0] 
         #
         data['start_time'] = data['time_from'].apply(lambda x: x.isoformat())
         data['end_time'] = data['time_until'].apply(lambda x: x.isoformat())
@@ -351,11 +349,13 @@ class DataManager:
         
     def store_data(self, table_name: str, data: pd.DataFrame, verbose: int = 1) -> None:
         """
-        Almacena datos en una tabla específica en PostgreSQL, validando 
-                los datos con pydantic.
+        Stores rows into a specified PostgreSQL table after Pydantic validation.
 
-        :param table_name: Nombre de la tabla.
-        :param data: DataFrame con los datos a almacenar.
+        :param table_name: destination table name.
+        :param data: DataFrame of rows to insert.
+        :param verbose: verbosity level.
+        :return: list of inserted row IDs.
+        :rtype: List[int]
         """
         if data.empty and verbose > 0:
             print(i18n._("PGSQL-INS-TAB-NOD-ERR").format(table_name=table_name))
@@ -365,13 +365,13 @@ class DataManager:
             if verbose > 0:
                 print(i18n._("PGSQL-INS-TAB-INFO"))
 
-            # Convertir columnas a cadenas si es necesario
+            # Convert time columns to strings
             if "start_time" in data.columns:
                 data["start_time"] = data["start_time"].astype(str)
             if "end_time" in data.columns:
                 data["end_time"] = data["end_time"].astype(str)
 
-            # Validar los datos
+            # Validate rows
             validated_rows = []
             for _, row in data.iterrows():
                 if table_name == "activity_leg":
@@ -381,7 +381,7 @@ class DataManager:
                 elif table_name == "activity_all":
                     row_dict = row.to_dict()
                     
-                    # Normalizamos los codeleg_ids: reemplazamos None por -1
+                    # Normalize None in codeleg_ids
                     if "codeleg_ids" in row_dict:
                         row_dict["codeleg_ids"] = [
                             -1 if v is None else int(v) for v in row_dict["codeleg_ids"]
@@ -391,16 +391,14 @@ class DataManager:
 
                 elif table_name == "fullref_sensor_codeid":
                     validated_rows.append(ActivitySegment(**row.to_dict()).dict())
-                    
                 elif table_name == "effective_gait":
-                    # No validamos con pydantic; insertamos tal cual
                     validated_rows.append(row.to_dict())
                 elif table_name == "codeids":
                     validated_rows.append(CodeID(**row.to_dict()).dict())
                 else:
-                    raise ValueError(f"Tabla no reconocida: {table_name}")
+                    raise ValueError(i18n._("ERR_UNKNOWN_TABLE").format(table=table_name))
 
-            # Guardar en PostgreSQL
+            # Insert into database
             inserted_ids = [] # List of inserted activity_leg IDs
             with self.pg_conn.cursor() as cursor:
                 for row in validated_rows:
@@ -426,10 +424,10 @@ class DataManager:
 
     def get_real_codeid(self, codeid_id: int) -> str:
         """
-        Obtiene el verdadero CodeID desde PostgreSQL dado un ID de la tabla codeids.
+        Retrieves the actual CodeID string from its numeric ID.
 
-        :param codeid_id: ID del CodeID en la tabla codeids.
-        :return: El verdadero CodeID como string.
+        :param codeid_id: numeric ID in the codeids table.
+        :return: CodeID string.
         :rtype: str
         """
         try:
@@ -438,9 +436,9 @@ class DataManager:
                 cursor.execute(query, (codeid_id,))
                 result = cursor.fetchone()
                 if result:
-                    return result[0]  # Devuelve el CodeID
+                    return result[0]  
                 else:
-                    raise ValueError(f"No se encontró CodeID para id {codeid_id}.")
+                    raise ValueError(i18n._("ERR_CODEID_NOT_FOUND").format(id=codeid_id))
         except Exception as e:
             print(i18n._("PGSQL-QRY-COD-ERR").format(e=e))
             raise
@@ -462,7 +460,7 @@ class DataManager:
                     sql.SQL(', ').join(map(sql.Literal, pair))
                 ) for pair in clegs]
 
-            # Construye la cláusula IN (ARRAY[...], ARRAY[...])
+            # Build ARRAY[...] literals for the IN clause
             in_clause = sql.SQL(', ').join(array_literals)
             query = sql.SQL("SELECT * FROM activity_all WHERE {} IN ({})").format(
                 sql.Identifier(clname),in_clause)

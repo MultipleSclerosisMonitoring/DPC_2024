@@ -1,67 +1,73 @@
 CREATE TABLE IF NOT EXISTS codeids (
     id SERIAL PRIMARY KEY,
-    codeid TEXT UNIQUE NOT NULL
+    codeid TEXT UNIQUE NOT NULL  -- Unique CodeID value
 );
 
 CREATE TABLE IF NOT EXISTS effective_movement (
     id SERIAL PRIMARY KEY,
-    codeid_id INT REFERENCES codeids(id),  -- Relación con codeids
+    codeid_id INT REFERENCES codeids(id),  -- Foreign key to codeids
     start_time TIMESTAMP WITH TIME ZONE NOT NULL,
-    end_time TIMESTAMP WITH TIME ZONE NOT NULL,
-    duration NUMERIC NOT NULL,
-    leg TEXT NOT NULL -- "Left" o "Right"
+    end_time   TIMESTAMP WITH TIME ZONE NOT NULL,
+    duration   NUMERIC NOT NULL,
+    leg        TEXT NOT NULL  -- 'Left' or 'Right'
 );
 
--- Índices para optimizar búsquedas
-CREATE INDEX IF NOT EXISTS idx_effective_movement_codeid_id ON effective_movement(codeid_id);
-CREATE INDEX IF NOT EXISTS idx_effective_movement_leg ON effective_movement(leg);
+-- Indexes for faster lookups
+CREATE INDEX IF NOT EXISTS idx_effective_movement_codeid_id
+    ON effective_movement(codeid_id);
+CREATE INDEX IF NOT EXISTS idx_effective_movement_leg
+    ON effective_movement(leg);
 
 CREATE TABLE IF NOT EXISTS activity_leg (
     id SERIAL PRIMARY KEY,
-    codeid_id INT REFERENCES codeids(id),  -- Relación con codeids
-    foot TEXT NOT NULL,  -- "Left" o "Right"
+    codeid_id  INT REFERENCES codeids(id),  -- Foreign key to codeids
+    foot       TEXT NOT NULL,               -- 'Left' or 'Right'
     start_time TIMESTAMP WITH TIME ZONE NOT NULL,
-    end_time TIMESTAMP WITH TIME ZONE NOT NULL,
-    duration NUMERIC NOT NULL,  -- Duración de la ventana en segundos
-    mac TEXT,  -- Dirección MAC del dispositivo
-    device_name TEXT,  -- Nombre del dispositivo
-    total_value NUMERIC
+    end_time   TIMESTAMP WITH TIME ZONE NOT NULL,
+    duration   NUMERIC NOT NULL,            -- Window duration in seconds
+    mac        TEXT,                        -- Device MAC address
+    device_name TEXT,                       -- Device name
+    total_value NUMERIC                     -- Aggregated value over window
 );
 
 CREATE TABLE IF NOT EXISTS activity_all (
-    id SERIAL PRIMARY KEY,
-    codeid_ids INTEGER[] NOT NULL,  -- Relación con la tabla codeids (Left y Right)
-    codeleg_ids INTEGER[] NOT NULL, -- Punteros a activity_leg.id (uno por pierna)
-    start_time TIMESTAMP WITH TIME ZONE NOT NULL,
-    end_time TIMESTAMP WITH TIME ZONE NOT NULL,
-    duration NUMERIC NOT NULL,
-    macs TEXT[],                    -- MACs de los sensores (Left y Right)
-    device_names TEXT[],           -- Nombres de dispositivos (Left y Right)
-    active_legs TEXT[],            -- ["Left", "Right"]
-    is_effective BOOLEAN DEFAULT FALSE
+    id            SERIAL PRIMARY KEY,
+    codeid_ids    INTEGER[] NOT NULL,  -- Array of codeid_ids ([Left, Right])
+    codeleg_ids   INTEGER[] NOT NULL,  -- Array of activity_leg IDs ([Left, Right])
+    start_time    TIMESTAMP WITH TIME ZONE NOT NULL,
+    end_time      TIMESTAMP WITH TIME ZONE NOT NULL,
+    duration      NUMERIC NOT NULL,
+    macs          TEXT[],             -- Array of MAC addresses ([Left, Right])
+    device_names  TEXT[],             -- Array of device names ([Left, Right])
+    active_legs   TEXT[],             -- Array of legs (['Left','Right'])
+    is_effective  BOOLEAN DEFAULT FALSE  -- Flag indicating effective gait
 );
 
 CREATE TABLE IF NOT EXISTS fullref_sensor_codeid (
-    id SERIAL PRIMARY KEY,
-    codeid_id INT REFERENCES codeids(id),
-    foot TEXT NOT NULL,  -- "Left" o "Right"
-    device_name TEXT,
-    mac TEXT,
-    start_time TIMESTAMP WITH TIME ZONE NOT NULL,
-    end_time TIMESTAMP WITH TIME ZONE NOT NULL
+    id          SERIAL PRIMARY KEY,
+    codeid_id   INT REFERENCES codeids(id),
+    foot        TEXT NOT NULL,       -- 'Left' or 'Right'
+    device_name TEXT,                -- Device name
+    mac         TEXT,                -- Device MAC address
+    start_time  TIMESTAMP WITH TIME ZONE NOT NULL,
+    end_time    TIMESTAMP WITH TIME ZONE NOT NULL
 );
 
--- Índices para optimizar búsquedas
-CREATE INDEX IF NOT EXISTS idx_fullref_codeid ON fullref_sensor_codeid(codeid_id);
-CREATE INDEX IF NOT EXISTS idx_fullref_foot ON fullref_sensor_codeid(foot);
-CREATE INDEX IF NOT EXISTS idx_fullref_time ON fullref_sensor_codeid(start_time, end_time);
+-- Indexes for faster lookups
+CREATE INDEX IF NOT EXISTS idx_fullref_codeid
+    ON fullref_sensor_codeid(codeid_id);
+CREATE INDEX IF NOT EXISTS idx_fullref_foot
+    ON fullref_sensor_codeid(foot);
+CREATE INDEX IF NOT EXISTS idx_fullref_time
+    ON fullref_sensor_codeid(start_time, end_time);
 
--- Nueva tabla para periodos de marcha efectiva simultánea
+-- Table for overlapping (simultaneous) effective-gait periods
 CREATE TABLE IF NOT EXISTS effective_gait (
-    id SERIAL PRIMARY KEY,
-    codeid_id INT REFERENCES codeids(id),
+    id         SERIAL PRIMARY KEY,
+    codeid_id  INT REFERENCES codeids(id),
     start_time TIMESTAMP WITH TIME ZONE NOT NULL,
     end_time   TIMESTAMP WITH TIME ZONE NOT NULL,
     duration   NUMERIC NOT NULL
 );
-CREATE INDEX IF NOT EXISTS idx_effective_gait_codeid ON effective_gait(codeid_id);
+CREATE INDEX IF NOT EXISTS idx_effective_gait_codeid
+    ON effective_gait(codeid_id);
