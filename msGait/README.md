@@ -1,99 +1,126 @@
 # msGait
 
-Procesamiento de señal de marcha: detección, clasificación y análisis.
+Gait signal processing, classification, and analysis for MS Monitoring.
 
-## Descripción
+## Architecture Overview
 
-El paquete `msGait` forma parte de la suite **MS Monitoring**. Proporciona funcionalidades para:
-- Identificar segmentos de actividad de marcha sincronizados (pie izquierdo + pie derecho).
-- Calcular magnitudes y espectros de señal (aceleración, giroscopio).
-- Detectar marchas efectivas usando criterios de potencia espectral y duración mínima.
+![Class Diagram: MovementDetector ↔ DataManager](../static/class_msGait.png)
 
-## Instalación
+*Class Diagram: `MovementDetector` and its connection to `DataManager`*
 
-`msGait` se distribuye dentro del paquete `ms_monitoring`. Instálalo con:
+## Core Components
 
-```bash
-pip install ms_monitoring
-```
+- **MovementDetector** (`movement_detector.py`)  
+  - `__init__(data_manager: DataManager, sampling_rate: float, sect: str, verbose: int)`  
+  - `fetch_sensor_data(start: str, end: str, codeid_id: int, foot: str) -> pandas.DataFrame`  
+  - `calculate_magnitude(df: pandas.DataFrame) -> pandas.Series`  
+  - `detect_effective_movement(activity_windows: pandas.DataFrame, nomf: Optional[str], vb: int) -> pandas.DataFrame`  
+  - `detect_effective_gait(df_effective: pandas.DataFrame, vb: int) -> pandas.DataFrame`  
+  - `save_to_postgresql(table_name: str, df: pandas.DataFrame, verbose: int) -> None`
 
-## Configuración
+- **(Future)**  
+  - **GaitClassifier** (`gait_classifier.py`)  
+  - **TrajectoryAnalyzer** (`trajectory_analyzer.py`)
 
-Define la sección `movement` en tu `config.yaml` (parte relevante):
+## Requirements
+
+- Python 3.12 or higher  
+- The ms_monitoring package dependencies (installed via `requirements.txt`):  
+  `influxdb-client`, `pandas`, `pydantic`, `PyYAML`, etc.
+
+## Configuration
+
+Add a `movement` section to your `config.yaml`:
 
 ```yaml
 movement:
-  freq_band_min: 0.5           # Banda de frecuencia mínima (Hz)
-  freq_band_max: 2.0           # Banda de frecuencia máxima (Hz)
-  power_threshold: 0.5         # Potencia mínima en la banda
-  min_continuous_seconds: 10   # Duración mínima continua (segundos)
+  # Threshold for the acceleration module (is_effective_by_time)
+  accel_threshold: 0.2
+  # Threshold for the gyroscope module (is_effective_by_time)
+  gyro_threshold: 60
+  # Power threshold in the Accel frequency band
+  accel_power_threshold: 0.125
+  # Power threshold in the Gyro frequency band
+  gyro_power_threshold: 1000
+  # Frequency band for Welch (Hz)
+  freq_band_min: 0.4
+  freq_band_max: 1.6
+  # Minimum number of peaks within an analysis segment ~ 7s
+  min_continuous_hits: 3
 ```
 
-## Uso en Python
+## Python Usage
 
 ```python
 from msTools.data_manager import DataManager
 from msGait.movement_detector import MovementDetector
 
-# Carga configuración y conecta a bases de datos
-dm = DataManager(config_path='config.yaml')
+# 1. Initialize DataManager
+dm = DataManager(config_path="config.yaml")
 
-# Recupera ventanas de actividad desde activity_all
-query = "SELECT id, start_time, end_time, duration, codeid_ids, codeleg_ids, active_legs FROM activity_all;"
-df_windows = dm.fetch_data(query)
+# 2. Retrieve stored activity windows
+df_windows = dm.segments_retrieval(
+    fstart="2024-01-01 00:00:00",
+    fend="2024-01-02 00:00:00",
+    ids=None,
+    verbose=1
+)
 
-# Inicializa el detector de movimiento
+# 3. Initialize MovementDetector
 detector = MovementDetector(
     data_manager=dm,
-    sampling_rate=50,    # frecuencia de muestreo en Hz
-    sect='movement',     # sección en config.yaml
-    verbose=1            # nivel de verbosidad
+    sampling_rate=50,     # Hz
+    sect="movement",
+    verbose=1
 )
 
-# Detectar marchas efectivas
+# 4. Detect effective movements
 df_effective = detector.detect_effective_movement(
     activity_windows=df_windows,
-    nomf='output.xlsx',  # opcional: exportar datos brutos a Excel
-    vb=2                  # nivel detallado
+    nomf="raw_output.xlsx",  # optional Excel export
+    vb=2                      # detail level
 )
 
-# Guardar resultados en PostgreSQL
-detector.save_to_postgresql('effective_movement', df_effective)
+# 5. Detect gait episodes
+df_gait = detector.detect_effective_gait(df_effective, vb=1)
+
+# 6. Save to PostgreSQL
+detector.save_to_postgresql("effective_movement", df_effective, verbose=1)
+detector.save_to_postgresql("effective_gait", df_gait, verbose=1)
 ```
 
-## Línea de comandos
+## Command-Line Usage
 
-Aunque `msGait` se usa desde código, también puedes invocar la utilidad completa con el script CLI:
+You can also run the full CLI:
 
 ```bash
-python -m ms_monitoring.find_activity   -c config.yaml   -f "2024-01-01 00:00:00"   -u "2024-01-02 00:00:00"   -v 2   --head-rows 5   -o output.xlsx
+python -m ms_monitoring.find_gait   -c config.yaml   -i "[ID1,ID2,...]"   -l en   --output raw_output.xlsx   --head-rows 5   --save   -v 2
 ```
 
-## Estructura del paquete
+**Options**  
+- `-c, --config` (YAML path; required)  
+- `-i, --ids` JSON list of `activity_all` IDs (required)  
+- `-l, --lang` Interface language (`en`/`es`, default `en`)  
+- `--output` Export raw sensor data to XLSX  
+- `--head-rows` Rows to preview when `-v ≥ 2` (default 5)  
+- `--save` Persist both `effective_movement` and `effective_gait`  
+- `-v, --verbose` Verbosity level (0–2)
 
-```
-msGait/
-├── __init__.py
-├── movement_detector.py
-└── models.py
-```
+## Documentation
 
-## Documentación
-
-La documentación detallada de cada módulo está en `docs/msGait.rst`. Para generarla:
+Full Sphinx-generated docs live in [`docs/msGait.rst`](../docs/msGait.rst). To rebuild:
 
 ```bash
 cd docs
 make html
 ```
 
-## Contribuir
+## Contributing
 
-1. Haz un fork del repositorio.
-2. Crea una rama: `git checkout -b feature/mi-mejora`.
-3. Realiza tus cambios y comités.
-4. Envía un pull request.
+1. Fork the repo  
+2. Create a branch: `git checkout -b feature/your-feature`  
+3. Commit and PR  
 
-## Licencia
+## License
 
-MIT License. Véase el archivo `LICENSE` en la raíz del proyecto.
+MIT. See [LICENSE](../LICENSE).  

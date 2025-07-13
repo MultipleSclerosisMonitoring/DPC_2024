@@ -111,7 +111,7 @@ class MovementDetector:
             msg = str(e)
             if "cannot query an empty range" in msg:
                 if self.verbose >= 2:
-                    print(f"[MovementDetector] empty range for CodeID {codeid}, foot {foot}")
+                    print(i18n._("WARN_EMPTY_RANGE").format(codeid=codeid, foot=foot))
                 return pd.DataFrame()
             if self.verbose >= 1:
                 print(i18n._("INFL-QRY-DATA-ERR").format(e=e))
@@ -124,7 +124,7 @@ class MovementDetector:
             df (pd.DataFrame): DataFrame containing raw sensor values.
 
         Returns:
-            pd.DataFrame: Same DataFrame with added '|a|' and '|g|' columns.
+            pd.DataFrame: Same DataFrame with added ``|a|`` and ``|g|`` columns.
         """
         if {"Ax", "Ay", "Az", "Gx", "Gy", "Gz"}.issubset(df.columns):
             df["|a|"] = np.sqrt(df["Ax"]**2 + df["Ay"]**2 + df["Az"]**2)
@@ -197,17 +197,18 @@ class MovementDetector:
 
         def segment_fixed_windows(df: pd.DataFrame, window_size: int = 256) -> List[Tuple[pd.Timestamp, pd.Timestamp]]:
             """
-            Divide los datos en ventanas consecutivas de tamaño fijo (por número de muestras).
+            Split the data into consecutive fixed-size windows (by sample count).
 
             Args:
-                df (pd.DataFrame): DataFrame con una columna '_time' ordenada.
-                window_size (int): Número de muestras por ventana.
+                df (pd.DataFrame): Sorted DataFrame with a '_time' column.
+                window_size (int): Number of samples per window.
 
             Returns:
-                List[Tuple[pd.Timestamp, pd.Timestamp]]: Lista de (start_time, end_time) por segmento.
+                List[Tuple[pd.Timestamp, pd.Timestamp]]: (start_time, end_time) for each window.
             """
+
             if "_time" not in df.columns:
-                raise ValueError("DataFrame must contain a '_time' column.")
+                raise ValueError(i18n._("ERR_MISSING_TIME_COLUMN"))
             
             df = df.sort_values("_time").reset_index(drop=True)
 
@@ -317,7 +318,8 @@ class MovementDetector:
             acc = sensor_data["|a|"].to_numpy()
             gyro = sensor_data["|g|"].to_numpy()
 
-            segments = segment_fixed_windows(sensor_data, 256) # Welch requiere 256 puntos
+            # We need 256 samples per window for Welch’s method
+            segments = segment_fixed_windows(sensor_data, 256)
 
             for seg_start, seg_end in segments:
                 seg_data = sensor_data[(sensor_data["_time"] >= seg_start) &
