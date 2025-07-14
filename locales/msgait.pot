@@ -1,0 +1,278 @@
+# SOME DESCRIPTIVE TITLE.
+# Copyright (C) YEAR THE PACKAGE'S COPYRIGHT HOLDER
+# This file is distributed under the same license as the PACKAGE package.
+# FIRST AUTHOR <EMAIL@ADDRESS>, YEAR.
+#
+#, fuzzy
+msgid ""
+msgstr ""
+"Project-Id-Version: PACKAGE VERSION\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2025-04-22 00:02+0200\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language-Team: LANGUAGE <LL@li.org>\n"
+"Language: \n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=CHARSET\n"
+"Content-Transfer-Encoding: 8bit\n"
+
+#: ms_monitoring/find_gait.py:24
+msgid "ARG_TIT_FIND_GAIT"
+msgstr ""
+
+#: ms_monitoring/find_gait.py:26
+msgid "ARG_LIST_ACT_ALL_IDS"
+msgstr ""
+
+#: ms_monitoring/find_gait.py:28
+msgid "ARG_STR_PATH_YAML"
+msgstr ""
+
+#: ms_monitoring/find_gait.py:29
+msgid "ARG_STR_LNG"
+msgstr ""
+
+#: ms_monitoring/find_gait.py:30
+msgid "ARG-STR-FOUT-XLSX"
+msgstr ""
+
+#: ms_monitoring/find_gait.py:32
+msgid "ARG_VB_LEVEL"
+msgstr ""
+
+#: ms_monitoring/find_gait.py:41
+msgid "PRCS_LIST_ACT_ALL_IDS"
+msgstr ""
+
+#: ms_monitoring/find_gait.py:54
+msgid "FGAIT_PGSQL_ERR"
+msgstr ""
+
+#: ms_monitoring/find_gait.py:58
+msgid "FGAIT_NO_WINS"
+msgstr ""
+
+#: ms_monitoring/find_gait.py:68
+msgid "FGAIT_1ST"
+msgstr ""
+
+#: ms_monitoring/find_gait.py:73
+msgid "FGAIT_NO_WALK"
+msgstr ""
+
+#: ms_monitoring/find_gait.py:77
+msgid "FGAIT_WKLS_FND"
+msgstr ""
+
+#: ms_monitoring/find_gait.py:84
+msgid "FGAIT_NUM_WALKS"
+msgstr ""
+
+#: ms_monitoring/find_gait.py:85
+msgid "FGAIT_END"
+msgstr ""
+
+#: ms_monitoring/find_mscodeids.py:26
+msgid "Find msCodeIDs and store activity windows into PostgreSQL."
+msgstr ""
+
+#: ms_monitoring/find_mscodeids.py:28
+msgid "Start datetime (format: 'YYYY-MM-DD HH:MM:SS')."
+msgstr ""
+
+#: ms_monitoring/find_mscodeids.py:30
+msgid "End datetime (format: 'YYYY-MM-DD HH:MM:SS')."
+msgstr ""
+
+#: ms_monitoring/find_mscodeids.py:32
+msgid "Path to the configuration file (config.yaml)."
+msgstr ""
+
+#: ms_monitoring/find_mscodeids.py:34
+msgid "Verbosity level (0=Silent, 1=Basic, 2=Detailed)."
+msgstr ""
+
+#: ms_monitoring/find_mscodeids.py:44
+msgid "Creating/verifying necessary tables..."
+msgstr ""
+
+#: ms_monitoring/find_mscodeids.py:49
+msgid "Tables verified and created if necessary."
+msgstr ""
+
+#: ms_monitoring/find_mscodeids.py:51
+msgid "Error verifying/creating tables: "
+msgstr ""
+
+#: ms_monitoring/find_mscodeids.py:76
+#, possible-python-brace-format
+msgid "Error: End date ({end}) is before start date ({start})."
+msgstr ""
+
+#: ms_monitoring/find_mscodeids.py:81
+#, possible-python-brace-format
+msgid "Getting msCodeIDs from {start} to {end}..."
+msgstr ""
+
+#: ms_monitoring/find_mscodeids.py:91
+msgid "No CodeIDs found."
+msgstr ""
+
+#: ms_monitoring/find_mscodeids.py:95
+#, possible-python-brace-format
+msgid "Found {n} different CodeIDs from {start} to {end}."
+msgstr ""
+
+#: ms_monitoring/find_mscodeids.py:101
+#, possible-python-brace-format
+msgid "Processing data for CodeID: {codeid}..."
+msgstr ""
+
+#: ms_monitoring/find_mscodeids.py:107
+#, possible-python-brace-format
+msgid "CodeID {codeid} stored with ID {id}."
+msgstr ""
+
+#: ms_monitoring/find_mscodeids.py:109
+#, possible-python-brace-format
+msgid "Error storing CodeID {codeid}: {error}"
+msgstr ""
+
+#: ms_monitoring/find_mscodeids.py:117
+#, possible-python-brace-format
+msgid "Error fetching data for CodeID {codeid}: {error}"
+msgstr ""
+
+#: ms_monitoring/find_mscodeids.py:122
+#, possible-python-brace-format
+msgid "No data found for CodeID: {codeid}."
+msgstr ""
+
+#: ms_monitoring/find_mscodeids.py:127
+#, possible-python-brace-format
+msgid ""
+"Foot field not found in sensor data for CodeID: {codeid}. Dataset size: "
+"{size}"
+msgstr ""
+
+#: ms_monitoring/find_mscodeids.py:140
+#, possible-python-brace-format
+msgid "No activity segments identified for CodeID: {codeid}, foot: Left."
+msgstr ""
+
+#: ms_monitoring/find_mscodeids.py:146
+#, possible-python-brace-format
+msgid "No activity segments identified for CodeID: {codeid}, foot: Right."
+msgstr ""
+
+#: ms_monitoring/find_mscodeids.py:154 ms_monitoring/find_mscodeids.py:161
+#, possible-python-brace-format
+msgid "Activity segments processed and stored ({n} rows):"
+msgstr ""
+
+#: ms_monitoring/find_mscodeids.py:172
+#, possible-python-brace-format
+msgid "Final merged segments stored ({n} rows):"
+msgstr ""
+
+#: ms_monitoring/find_mscodeids.py:175
+#, possible-python-brace-format
+msgid "Error processing activity segments for CodeID {codeid}: {error}"
+msgstr ""
+
+#: ms_monitoring/find_mscodeids.py:179
+msgid "All CodeIDs processed successfully."
+msgstr ""
+
+#: msTools/data_manager.py:81
+msgid "PGSQL-CONN-ERR"
+msgstr ""
+
+#: msTools/data_manager.py:130
+msgid "PGSQL-TAB-ERR"
+msgstr ""
+
+#: msTools/data_manager.py:166
+msgid "INFL-QRY-COD-ERR"
+msgstr ""
+
+#: msTools/data_manager.py:185 msGait/movement_detector.py:29
+msgid "PGSQL-QRY-GEN-ERR"
+msgstr ""
+
+#: msTools/data_manager.py:200
+msgid "VB_REG_ACT_ALL"
+msgstr ""
+
+#: msTools/data_manager.py:211
+msgid "VB-ACT-ALL-LEGS"
+msgstr ""
+
+#: msTools/data_manager.py:242
+msgid "PGSQL-VAL-COD-ERR"
+msgstr ""
+
+#: msTools/data_manager.py:246
+msgid "PGSQL-INS-COD-ERR"
+msgstr ""
+
+#: msTools/data_manager.py:292 msGait/movement_detector.py:155
+msgid "PGSQL-INS-TAB-NOD-ERR"
+msgstr ""
+
+#: msTools/data_manager.py:296
+msgid "PGSQL-INS-TAB-INFO"
+msgstr ""
+
+#: msTools/data_manager.py:339
+msgid "PGSQL-INS-TAB-OK"
+msgstr ""
+
+#: msTools/data_manager.py:342
+msgid "PGSQL-VAL-TAB-ERR"
+msgstr ""
+
+#: msTools/data_manager.py:345 msGait/movement_detector.py:161
+msgid "PGSQL-INS-TAB-ERR"
+msgstr ""
+
+#: msTools/data_manager.py:366
+msgid "PGSQL-QRY-COD-ERR"
+msgstr ""
+
+#: msGait/movement_detector.py:58
+msgid "INFL-QRY-DATA-ERR"
+msgstr ""
+
+#: msGait/movement_detector.py:67
+msgid "MVDET-AG-NODAT"
+msgstr ""
+
+#: msGait/movement_detector.py:87
+msgid "MVNT-ROOT-MISS"
+msgstr ""
+
+#: msGait/movement_detector.py:99
+msgid "MVNT-TS-NOV"
+msgstr ""
+
+#: msGait/movement_detector.py:107
+msgid "MVNT-QRY-DAT"
+msgstr ""
+
+#: msGait/movement_detector.py:117
+msgid "MVNT-XLSX-DAT"
+msgstr ""
+
+#: msGait/movement_detector.py:123
+msgid "MVNT-QRY-REC"
+msgstr ""
+
+#: msGait/movement_detector.py:142
+msgid "MVNT-WLK-FOOT"
+msgstr ""
+
+#: msGait/movement_detector.py:150
+msgid "MVNT-VAL-EFF-ERR"
+msgstr ""
