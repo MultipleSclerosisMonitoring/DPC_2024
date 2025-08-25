@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import FastAPI, HTTPException, Query, Request
+from fastapi.responses import RedirectResponse
 from pydantic import BaseModel
 from typing import List, Optional, Literal, Dict, Any
 from datetime import datetime, timedelta
@@ -12,7 +13,8 @@ from msCodeID.codeid_processor import CodeIDProcessor
 app = FastAPI(
     title="MS Monitoring API",
     version="0.1.0",
-    description="API to display activity windows and gait detection using existing logic."
+    description="API to display activity windows and gait detection using existing logic.",
+    root_path="/msGait"
 )
 
 # ---- SINGLETONS SENCILLOS ----
@@ -26,14 +28,14 @@ def _startup():
     Adjust routes/params if your MovementDetector requires a different signature.
     """
     global _dm, _detector
-    _dm = DataManager(config_path="config.yaml")
+    _dm = DataManager(config_path=".config.yaml")
 
     now = datetime.utcnow()
     fstart = (now - timedelta(minutes=1)).strftime("%Y-%m-%d %H:%M:%S")
     fend   = now.strftime("%Y-%m-%d %H:%M:%S")
 
     _detector = MovementDetector(
-        config_file="config.yaml",
+        config_file=".config.yaml",
         sampling_rate=50,
         sect="movement",
         fstart=fstart,
@@ -59,6 +61,11 @@ class GaitResponse(BaseModel):
 
 
 # ---- ENDPOINTS ----
+
+@app.get("/")
+async def root(request: Request):
+    # Genera la URL completa para la documentación, incluyendo el /msGait
+    return RedirectResponse(url=request.url_for("swagger_ui_html"))
 
 @app.get("/health")
 def health():
