@@ -17,6 +17,33 @@ class VAction(argparse.Action):
         else:
             setattr(namespace, self.dest, int(values))
 
+def parse_range_list(rango_str):
+    """Convierte una cadena como '1-271' o '1,5,10-15' a una lista de enteros."""
+    result = set()
+    
+    # Dividir por comas para manejar múltiples segmentos (ej. '1,10-15')
+    for segment in rango_str.split(','):
+        if not segment:
+            continue
+        
+        # Si contiene un guion, es un rango (ej. '10-15')
+        if '-' in segment:
+            try:
+                # Extraer inicio y fin del rango
+                start, end = map(int, segment.split('-'))
+                # Añadir el rango de enteros al resultado
+                result.update(range(start, end + 1))
+            except ValueError:
+                raise ValueError(f"Formato de rango inválido: {segment}. Debe ser 'inicio-fin'.")
+        
+        # Si no hay guion, es un solo ID (ej. '5')
+        else:
+            try:
+                result.add(int(segment))
+            except ValueError:
+                raise ValueError(f"Formato de ID inválido: {segment}. Debe ser un número.")
+                
+    return sorted(list(result)) # Devolver la lista ordenada
 
 def main():
     # 1) Pre‐parse only -l/--lang (to avoid showing help prematurely)
@@ -36,8 +63,9 @@ def main():
         description=_("ARG_TIT_FIND_GAIT")
     )
     parser.add_argument(
-        "-i", "--ids", dest="act_all_ids", metavar="IDS", type=json.loads, required=True,
-        help=_("ARG_LIST_ACT_ALL_IDS")
+        "-i", "--ids", dest="act_all_ids", metavar="IDS", type=parse_range_list, 
+        required=True,
+        help=_("ARG_LIST_ACT_ALL_IDS. Formato 1-271 o 1,5,10-15")
     )
     parser.add_argument(
         "-c", "--config", dest="config_file", type=str, required=True,
