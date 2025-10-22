@@ -382,10 +382,8 @@ class MovementDetector:
                 print(i18n._("LST-SEGS").format(results=pd.DataFrame(results)))
                 
             if vb >= 2:
-                print(i18n._("MVNT-WLK-FOOT").format(
-                    codeid_id=codeid_id, foot=foot,
-                    dur=(end - start).total_seconds()
-                ))
+                print(i18n._("MVNT-WLK-FOOT").format(cid=codeid_id, foot=foot,
+                    dur=(end - start).total_seconds()))
 
         if writer:
             writer.close()
