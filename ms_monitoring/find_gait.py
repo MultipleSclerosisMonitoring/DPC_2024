@@ -1,6 +1,7 @@
 import argparse
 import json
 from typing import Optional, List
+from datetime import datetime, timedelta, timezone
 
 from msTools import i18n
 from msTools.data_manager import DataManager
@@ -18,7 +19,14 @@ class VAction(argparse.Action):
             setattr(namespace, self.dest, int(values))
 
 def parse_range_list(rango_str):
-    """Convierte una cadena como '1-271' o '1,5,10-15' a una lista de enteros."""
+    """Convert a string like '1-271' or '1,5,10-15' into a list of integers.
+
+    Args:
+    rango_str: Range/list specification.
+
+    Returns:
+    List[int]: Sorted list of IDs.
+    """
     result = set()
     
     # Dividir por comas para manejar múltiples segmentos (ej. '1,10-15')
@@ -45,6 +53,25 @@ def parse_range_list(rango_str):
                 
     return sorted(list(result)) # Devolver la lista ordenada
 
+
+def _default_last_hours_window(hours_back: int) -> tuple[str, str]:
+    """Return ISO timestamps (UTC) for the last ``hours_back`` hours window.
+
+    Args:
+    hours_back: Number of hours to look back from *now*.
+
+    Returns:
+    Tuple[str, str]: (fstart, fend) as ISO strings with "Z" suffix.
+    """
+    now = datetime.now(timezone.utc)
+    start = now - timedelta(hours=hours_back)
+    # Use Zulu format acceptable by Influx/our pipeline downstream
+    fstart = start.isoformat().replace("+00:00", "Z")
+    fend = now.isoformat().replace("+00:00", "Z")
+    return fstart, fend
+
+
+
 def main():
     # 1) Pre‐parse only -l/--lang (to avoid showing help prematurely)
     pre = argparse.ArgumentParser(add_help=False)
@@ -64,7 +91,7 @@ def main():
     )
     parser.add_argument(
         "-i", "--ids", dest="act_all_ids", metavar="IDS", type=parse_range_list, 
-        required=True,
+        required=False,
         help=_("ARG_LIST_ACT_ALL_IDS. Formato 1-271 o 1,5,10-15")
     )
     parser.add_argument(
@@ -100,14 +127,25 @@ def main():
         i18n.init_translation(args.lng)
         _ = i18n._
 
+    # Determine retrieval mode: explicit IDs vs last-N-hours window
+    use_ids = args.act_all_ids is not None and len(args.act_all_ids) > 0
+    fstart, fend = (None, None)
+
+
+    if not use_ids:
+        # Fallback: last N hours window (defaults to 25h)
+        fstart, fend = _default_last_hours_window(args.hours_back)
+        if args.verbose >= 1:
+            print(_("FGAIT_USING_LAST_HOURS").format(n=args.hours_back))
+
     # Initialize the MovementDetector (internally handles DataManager and segment retrieval)
     # Supports either supplying IDs or date ranges
     detector = MovementDetector(
         config_file   = args.config_file,
         sampling_rate = 50,
-        fstart        = None,
-        fend          = None,
-        ids           = args.act_all_ids,
+        fstart        = fstart,
+        fend          = fend,
+        ids           = (args.act_all_ids if use_ids else None),
         verbose       = args.verbose
     )
 

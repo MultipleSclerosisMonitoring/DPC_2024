@@ -1,5 +1,7 @@
 import pandas as pd
 import numpy as np
+
+from datetime import timezone
 from pandas import ExcelWriter
 from typing import List, Optional, Tuple
 from concurrent.futures import ThreadPoolExecutor
@@ -24,6 +26,7 @@ class MovementDetector:
         fstart: Optional[str] = None,
         fend: Optional[str] = None,
         ids: Optional[List[int]] = None,
+        ids_from_time: list[int] | None = None,
         verbose: int = 1
     ) -> None:
         """Initializes the movement detector, loads configurations and activity data.
@@ -42,10 +45,35 @@ class MovementDetector:
 
         # Initialize DataManager
         self.data_manager = DataManager(config_path=config_file)
+        
+        if ids is None and fstart is not None and fend is not None:
+            """If only a time window is provided, resolve IDs from ``activity_all`` first.
+
+            This switches the retrieval mode to ID-based when matches are found, ensuring
+            deterministic segment selection for downstream steps.
+
+            Args:
+                fstart: Start of the time window (ISO str or datetime).
+                fend: End of the time window (ISO str or datetime).
+                ids: Optional explicit IDs (skips resolution when provided).
+            """
+            try:
+                ids_from_time = self.data_manager.get_activity_ids_by_start_date_range(fstart, fend)
+                if verbose >= 1:
+                    if ids_from_time:
+                        print(f"[MovementDetector] {len(ids_from_time)} ID(s) found in activity_all for the time window.")
+                        self.ids = ids_from_time
+                    else:
+                        print("[MovementDetector] No IDs found in activity_all for the requested time window.")
+            except Exception as e:
+                if verbose >= 1:
+                    print(f"[MovementDetector] ID lookup by start_date failed: {e}")
+        else:
+            self.ids = ids
 
         # Retrieve activity segments based on IDs or time range from activity_all table
         self.activity_all = self.data_manager.segments_retrieval(
-            fstart=fstart, fend=fend, ids=ids, verbose=verbose
+            fstart=fstart, fend=fend, ids=self.ids, verbose=verbose
         )
         if self.activity_all.empty and verbose >= 1:
             print(i18n._("FGAIT_NO_WINS"))
@@ -54,7 +82,7 @@ class MovementDetector:
         self.df_legs = self.data_manager.recover_activity_all(
             self.activity_all, vb=verbose
         )
-
+        
         # Load detection parameters from config
         params = self.data_manager.get_config(sect)
         self.freq_band = (params["freq_band_min"], params["freq_band_max"])
@@ -263,9 +291,13 @@ class MovementDetector:
         for row in activity_windows.itertuples(index=False):
             segments = []
             valid_segments = []
+            
+            if vb >= 1:
+                print(i18n._("MSG_TMP_IDS").format(id=row.id,ref=row.codeid_id,
+                                tstart=row.start_time,tend=row.end_time))
             try:
-                start = row.start_time.tz_localize('UTC') # ensure_utc(row.start_time)
-                end = row.end_time.tz_localize('UTC')     # ensure_utc(row.end_time)
+                start = row.start_time.replace(tzinfo=timezone.utc) # ensure_utc(row.start_time)
+                end = row.end_time.replace(tzinfo=timezone.utc)    # ensure_utc(row.end_time)
             except Exception:
                 if self.verbose:
                     print(i18n._("MVNT-TS-NOV").format(row=row))
@@ -432,3 +464,4 @@ class MovementDetector:
             self.data_manager.store_data(table_name, df, verbose)
         except Exception as e:
             print(i18n._("PGSQL-INS-TAB-ERR").format(fable_name=table_name, e=e))
+

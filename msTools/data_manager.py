@@ -480,3 +480,42 @@ class DataManager:
         except Exception as e:
             print(i18n._("PGSQL-QRY-COD-ERR").format(e=e))
             raise
+
+    def get_activity_ids_by_start_date_range(
+        self, start_datetime: str | datetime.datetime, end_datetime: str | datetime.datetime
+    ) -> list[int]:
+        """
+            Return distinct IDs from ``activity_all`` where ``start_time`` ∈ [start, end].
+
+            Normalizes inputs to UTC and performs a parameterized query on PostgreSQL
+            using the existing connection managed by ``DataManager``.
+
+            Args:
+                start_datetime: Start of the time window (ISO string or datetime).
+                end_datetime: End of the time window (ISO string or datetime).
+
+            Returns:
+                A sorted list of unique ``activity_all.id`` values.
+
+            Raises:
+                psycopg2.Error: If a database error occurs (caught and logged in your current impl).
+        """
+        try:
+            sdt = ensure_utc(start_datetime)  # → aware UTC datetime
+            edt = ensure_utc(end_datetime)
+
+            with self.pg_conn.cursor() as cur:
+                cur.execute(
+                    """
+                    SELECT DISTINCT id
+                    FROM activity_all
+                    WHERE start_time >= %s AND start_time <= %s
+                    ORDER BY id
+                    """,
+                    (sdt, edt),
+                )
+                rows = cur.fetchall()
+                return [r[0] for r in rows]
+        except Exception as e:
+            print(i18n._("PGSQL-QRY-GEN-ERR").format(e=e))
+            return []    
