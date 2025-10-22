@@ -293,7 +293,7 @@ class MovementDetector:
             valid_segments = []
             
             if vb >= 1:
-                print(i18n._("MSG_TMP_IDS").format(id=row.id,ref=row.codeid_id,
+                print(i18n._("MSG_TMP_IDS").format(id=row.CodeID,ref=row.codeid_id,
                                 tstart=row.start_time,tend=row.end_time))
             try:
                 start = row.start_time.replace(tzinfo=timezone.utc) # ensure_utc(row.start_time)
