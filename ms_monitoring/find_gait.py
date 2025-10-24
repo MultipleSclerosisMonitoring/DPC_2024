@@ -115,7 +115,7 @@ def main():
         help=_("ARG_HEAD_ROWS")
     )
     parser.add_argument(
-        "--save", dest="save", type=int, choices=[0,1], default=0,
+        "--save", dest="save", type=int, choices=[0,1], default=1,
         help=_("ARG_SAVE")
     )
 
