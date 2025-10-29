@@ -85,7 +85,8 @@ def main():
     if args.until_date:
         end_datetime = ensure_utc(args.until_date)
     else:
-        end_datetime = ensure_utc(datetime.now())
+        end_datetime = ensure_utc(datetime.now(pytz.timezone("Europe/Madrid")))
+        end_datetime = ensure_utc(end_datetime)
 
     # If end is before start, error and exit
     if end_datetime < start_datetime:

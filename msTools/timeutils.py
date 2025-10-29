@@ -13,6 +13,7 @@ def ensure_utc(ts):
     ts = pd.to_datetime(ts)
     if ts.tzinfo is None:
         # Localize naive timestamps to Europe/Madrid
-        ts = ts.tz_localize("Europe/Madrid")
+        ts = ts.tz_localize("Europe/Madrid",
+                            ambiguous='infer',nonexistent='shift_forward')
     # Convert any timezone-aware timestamp to UTC
     return ts.tz_convert("UTC")
