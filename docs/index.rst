@@ -5,6 +5,13 @@ MS Monitoring Documentation
 
 Welcome to the **MS Monitoring** documentation. This guide covers installation, usage, and the architecture of each module in the `ms_monitoring` project.
 
+Source Code
+===========
+
+The source code for this project is hosted on GitHub:
+`https://github.com/MultipleSclerosisMonitoring/DPC_2024 <https://github.com/MultipleSclerosisMonitoring/DPC_2024>`_
+
+
 .. automodule:: msTools.i18n
    :members:
    :undoc-members:

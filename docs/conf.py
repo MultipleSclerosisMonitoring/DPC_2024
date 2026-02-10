@@ -55,6 +55,16 @@ autodoc_default_options = {
 
 language = 'en'
 
+# -- Options for GitHub integration ------------------------------------------
+
+html_context = {
+    "display_github": True, # Integrate GitHub
+    "github_user": "MultipleSclerosisMonitoring", # Username
+    "github_repo": "DPC_2024", # Repo name
+    "github_version": "main", # Version
+    "conf_py_path": "/docs/", # Path in the checkout to the docs root
+}
+
 # -- Options for HTML output -------------------------------------------------
 
 html_theme = 'sphinx_rtd_theme'
