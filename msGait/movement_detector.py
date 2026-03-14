@@ -46,7 +46,9 @@ class MovementDetector:
         # Initialize DataManager
         self.data_manager = DataManager(config_path=config_file)
         
-        if ids is None and fstart is not None and fend is not None:
+        self.ids = ids
+
+        if self.ids is None and fstart is not None and fend is not None:
             """If only a time window is provided, resolve IDs from ``activity_all`` first.
 
             This switches the retrieval mode to ID-based when matches are found, ensuring
@@ -62,14 +64,13 @@ class MovementDetector:
                 if verbose >= 1:
                     if ids_from_time:
                         print(f"[MovementDetector] {len(ids_from_time)} ID(s) found in activity_all for the time window.")
-                        self.ids = ids_from_time
                     else:
                         print("[MovementDetector] No IDs found in activity_all for the requested time window.")
+                if ids_from_time:
+                    self.ids = ids_from_time
             except Exception as e:
                 if verbose >= 1:
                     print(f"[MovementDetector] ID lookup by start_date failed: {e}")
-        else:
-            self.ids = ids
 
         # Retrieve activity segments based on IDs or time range from activity_all table
         self.activity_all = self.data_manager.segments_retrieval(

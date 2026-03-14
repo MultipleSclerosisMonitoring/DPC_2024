@@ -115,6 +115,10 @@ def main():
         help=_("ARG_HEAD_ROWS")
     )
     parser.add_argument(
+        "--hours-back", dest="hours_back", type=int, default=25,
+        help="If --ids is omitted, look back the last N hours (default: 25)."
+    )
+    parser.add_argument(
         "--save", dest="save", type=int, choices=[0,1], default=1,
         help=_("ARG_SAVE")
     )

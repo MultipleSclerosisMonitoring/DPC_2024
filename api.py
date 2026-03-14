@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import os
+from pathlib import Path 
+
 from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.responses import RedirectResponse
 from pydantic import BaseModel
@@ -21,6 +24,14 @@ app = FastAPI(
 _dm: Optional[DataManager] = None
 _detector: Optional[MovementDetector] = None
 
+
+def _default_time_window_utc(hours: int = 24) -> tuple[str, str]:
+    """Return (start, end) ISO8601 UTC strings with Z suffix."""
+    now = datetime.utcnow()
+    end = now.strftime("%Y-%m-%dT%H:%M:%SZ")
+    start = (now - timedelta(hours=hours)).strftime("%Y-%m-%dT%H:%M:%SZ")
+    return start, end
+
 @app.on_event("startup")
 def _startup():
     """
@@ -31,8 +42,8 @@ def _startup():
     _dm = DataManager(config_path=".config.yaml")
 
     now = datetime.utcnow()
-    fstart = (now - timedelta(minutes=1)).strftime("%Y-%m-%d %H:%M:%S")
-    fend   = now.strftime("%Y-%m-%d %H:%M:%S")
+    fstart = (now - timedelta(minutes=1)).strftime("%Y-%m-%dT%H:%M:%SZ")
+    fend   = now.strftime("%Y-%m-%dT%H:%M:%SZ")
 
     _detector = MovementDetector(
         config_file=".config.yaml",
@@ -82,6 +93,8 @@ def list_codeids(
     """
     assert _dm is not None
     try:
+        if start is None or end is None:
+            start, end = _default_time_window_utc(hours=24)
         return _dm.get_codeids_in_range(start, end)
     except Exception as e:
         raise HTTPException(500, detail=f"Error retrieving codeids: {e}")
@@ -99,6 +112,9 @@ def activity_windows(
     """
     assert _dm is not None
     try:
+        if ids is None:
+            if start is None or end is None:
+                start, end = _default_time_window_utc(hours=24)
         df = _dm.segments_retrieval(
             fstart=start, fend=end, ids=ids, verbose=verbose
         )

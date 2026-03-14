@@ -3,8 +3,8 @@
 find_mscodeids
 ==============
 
-Utility to retrieve unique CodeIDs from InfluxDB, identify activity segments  
-for each device (“Left” and “Right” foot), and store them in PostgreSQL tables  
+Utility to retrieve unique CodeIDs from InfluxDB, identify activity segments
+for each device ("Left" and "Right" foot), and store them in PostgreSQL tables
 (`activity_leg` and `activity_all`).
 
 **Location:** ``ms_monitoring/find_mscodeids.py``
@@ -37,17 +37,16 @@ for each device (“Left” and “Right” foot), and store them in PostgreSQL 
     DataMgr   -> Proc      [label="return CodeID list"];
 
     // Process each CodeID
-    Proc      -> Proc      [label="for each CodeID:\nfetch_sensor_data →\nidentify_activity_segments →\nstore_data(activity_leg & activity_all)"];
+    Proc      -> Proc      [label="for each CodeID:\nfetch_sensor_data →\nidentify_activity_segments →\nstore_data(activity_leg & activity_all) (optional)"];
 
     // Storage to PostgreSQL
-    Proc      -> DataMgr   [label="store_data(...)"];
+    Proc      -> DataMgr   [label="store_data(...) (optional)"];
     DataMgr   -> PostgreSQL[label="INSERT activity_leg & activity_all"];
 
     // Finish up
     Proc      -> CLI       [label="print INFO_ALL_PROCESSED"];
     CLI       -> User      [label="display summary"];
   }
-
 
 Usage
 -----
@@ -58,39 +57,45 @@ Run as a module:
 
     python -m ms_monitoring.find_mscodeids \
       -c config.yaml \
-      [-f "YYYY-MM-DD HH:MM:SS"] \
-      [-u "YYYY-MM-DD HH:MM:SS"] \
-      [-l en] \
-      [-v N] \
-      [--head-rows M]
+      -f "2024-06-01 00:00:00" \
+      -u "2024-06-30 23:59:59" \
+      -l en \
+      --save 1 \
+      -v 2 \
+      --head-rows 10
 
 Arguments
 ---------
 
-- ``-c, --config``  
+- ``-c, --config``
   Path to the YAML configuration file. (required)
 
-- ``-f, --from``  
-  Start datetime, format ``'YYYY-MM-DD HH:MM:SS'``.  
+- ``-f, --from``
+  Start datetime, format ``YYYY-MM-DD HH:MM:SS``.
   Default: midnight (00:00:00) of the previous day.
 
-- ``-u, --until``  
-  End datetime, same format. Default: now.
+- ``-u, --until``
+  End datetime, same format.
+  Default: now.
 
-- ``-l, --lang``  
-  Interface language (``en``, ``es``). Default: ``en``.
+- ``-l, --lang``
+  Interface language (``en``, ``es``). Default: ``es``.
 
-- ``-v, --verbose``  
+- ``--save``
+  Persist results to PostgreSQL: ``--save 1`` (default) writes to
+  ``codeids``, ``activity_leg`` and ``activity_all``; ``--save 0`` runs in dry-run mode.
+
+- ``-v, --verbose``
   Verbosity level (0: silent, 1: info, 2: debug, 3+: trace).
 
-- ``--head-rows``  
-  Number of rows to display for segment previews when verbosity ≥ 2.  
+- ``--head-rows``
+  Number of rows to display for segment previews when verbosity ≥ 2.
   Default: 5.
 
 Examples
 --------
 
-Basic run with defaults::
+Basic run with defaults (yesterday 00:00 → now)::
 
   $ python -m ms_monitoring.find_mscodeids \
       -c config.yaml
@@ -102,5 +107,15 @@ Specify full range, English, and verbose output::
       -f "2024-06-01 00:00:00" \
       -u "2024-06-30 23:59:59" \
       -l en \
+      --save 1 \
       -v 2 \
       --head-rows 10
+
+Dry-run (no PostgreSQL writes)::
+
+  $ python -m ms_monitoring.find_mscodeids \
+      -c config.yaml \
+      -f "2024-06-01 00:00:00" \
+      -u "2024-06-01 23:59:59" \
+      --save 0 \
+      -v 1

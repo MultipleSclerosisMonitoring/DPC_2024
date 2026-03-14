@@ -1,6 +1,6 @@
 # msGait
 
-Gait signal processing, classification, and analysis for MS Monitoring.
+Gait signal processing and effective-gait detection for MS Monitoring.
 
 ## Architecture Overview
 
@@ -10,23 +10,19 @@ Gait signal processing, classification, and analysis for MS Monitoring.
 
 ## Core Components
 
-- **MovementDetector** (`movement_detector.py`)  
-  - `__init__(data_manager: DataManager, sampling_rate: float, sect: str, verbose: int)`  
-  - `fetch_sensor_data(start: str, end: str, codeid_id: int, foot: str) -> pandas.DataFrame`  
-  - `calculate_magnitude(df: pandas.DataFrame) -> pandas.Series`  
-  - `detect_effective_movement(activity_windows: pandas.DataFrame, nomf: Optional[str], vb: int) -> pandas.DataFrame`  
-  - `detect_effective_gait(df_effective: pandas.DataFrame, vb: int) -> pandas.DataFrame`  
+- **MovementDetector** (`movement_detector.py`)
+  - `__init__(config_file: str, sampling_rate: float, sect: str = "movement", fstart: Optional[str] = None, fend: Optional[str] = None, ids: Optional[List[int]] = None, verbose: int = 1)`
+  - `fetch_sensor_data(start_time: str, end_time: str, codeid_id: int, foot: str) -> pandas.DataFrame`
+  - `calculate_magnitude(df: pandas.DataFrame) -> pandas.DataFrame`
+  - `detect_effective_movement(activity_windows: pandas.DataFrame, nomf: Optional[str] = None, vb: int = 0) -> pandas.DataFrame`
+  - `detect_effective_gait(df_effective: pandas.DataFrame, vb: int) -> pandas.DataFrame`
   - `save_to_postgresql(table_name: str, df: pandas.DataFrame, verbose: int) -> None`
-
-- **(Future)**  
-  - **GaitClassifier** (`gait_classifier.py`)  
-  - **TrajectoryAnalyzer** (`trajectory_analyzer.py`)
+  - `close() -> None`
 
 ## Requirements
 
-- Python 3.12 or higher  
-- The ms_monitoring package dependencies (installed via `requirements.txt`):  
-  `influxdb-client`, `pandas`, `pydantic`, `PyYAML`, etc.
+- Python 3.12 or higher
+- The **ms_monitoring** package dependencies (installed via `requirements.txt`)
 
 ## Configuration
 
@@ -52,41 +48,32 @@ movement:
 ## Python Usage
 
 ```python
-from msTools.data_manager import DataManager
 from msGait.movement_detector import MovementDetector
 
-# 1. Initialize DataManager
-dm = DataManager(config_path="config.yaml")
-
-# 2. Retrieve stored activity windows
-df_windows = dm.segments_retrieval(
-    fstart="2024-01-01 00:00:00",
-    fend="2024-01-02 00:00:00",
-    ids=None,
-    verbose=1
-)
-
-# 3. Initialize MovementDetector
+# Initialize MovementDetector (it manages DataManager internally)
 detector = MovementDetector(
-    data_manager=dm,
-    sampling_rate=50,     # Hz
-    sect="movement",
+    config_file="config.yaml",
+    sampling_rate=50,      # Hz
+    ids=[12, 34, 56],      # activity_all IDs (optional)
     verbose=1
 )
 
-# 4. Detect effective movements
+# Detect effective movements (per leg)
 df_effective = detector.detect_effective_movement(
-    activity_windows=df_windows,
+    activity_windows=detector.df_legs,
     nomf="raw_output.xlsx",  # optional Excel export
-    vb=2                      # detail level
+    vb=2
 )
 
-# 5. Detect gait episodes
+# Detect bipedal gait episodes
 df_gait = detector.detect_effective_gait(df_effective, vb=1)
 
-# 6. Save to PostgreSQL
+# Save to PostgreSQL (optional)
 detector.save_to_postgresql("effective_movement", df_effective, verbose=1)
 detector.save_to_postgresql("effective_gait", df_gait, verbose=1)
+
+# Close DB connections
+detector.close()
 ```
 
 ## Command-Line Usage
@@ -94,17 +81,33 @@ detector.save_to_postgresql("effective_gait", df_gait, verbose=1)
 You can also run the full CLI:
 
 ```bash
-python -m ms_monitoring.find_gait   -c config.yaml   -i "[ID1,ID2,...]"   -l en   --output raw_output.xlsx   --head-rows 5   --save   -v 2
+# Process explicit activity_all IDs
+python -m ms_monitoring.find_gait \
+  -c config.yaml \
+  -i 12,34,56 \
+  -l en \
+  --output raw_output.xlsx \
+  --save 1 \
+  -v 2
+
+# If -i/--ids is omitted, process the last N hours (default: 25)
+python -m ms_monitoring.find_gait \
+  -c config.yaml \
+  --hours-back 48 \
+  -l en \
+  --save 0 \
+  -v 1
 ```
 
-**Options**  
-- `-c, --config` (YAML path; required)  
-- `-i, --ids` JSON list of `activity_all` IDs (required)  
-- `-l, --lang` Interface language (`en`/`es`, default `en`)  
-- `--output` Export raw sensor data to XLSX  
-- `--head-rows` Rows to preview when `-v ≥ 2` (default 5)  
-- `--save` Persist both `effective_movement` and `effective_gait`  
-- `-v, --verbose` Verbosity level (0–2)
+**Options**
+- `-c, --config`  (YAML path; required)
+- `-i, --ids`     Range/list of `activity_all` IDs: `1-271` or `1,5,10-15`
+- `--hours-back`  If `--ids` is omitted, look back the last N hours (default: 25)
+- `-l, --lang`    Interface language (`en`/`es`, default `es`)
+- `--output`      Export raw sensor data to XLSX
+- `--head-rows`   Rows to preview when `-v ≥ 2` (default 8)
+- `--save`        Persist (`--save 1`, default) or dry-run (`--save 0`)
+- `-v, --verbose` Verbosity level (0–2)
 
 ## Documentation
 
@@ -115,12 +118,6 @@ cd docs
 make html
 ```
 
-## Contributing
-
-1. Fork the repo  
-2. Create a branch: `git checkout -b feature/your-feature`  
-3. Commit and PR  
-
 ## License
 
-MIT. See [LICENSE](../LICENSE).  
+MIT. See [LICENSE](../LICENSE).

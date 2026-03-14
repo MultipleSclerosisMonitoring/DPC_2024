@@ -62,6 +62,10 @@ def main():
         "--head-rows", dest="head_rows", type=int, default=5,
         help=_("ARG_HEAD_ROWS")
     )
+    parser.add_argument(
+        "--save", dest="save", type=int, choices=[0,1], default=1,
+        help=_("ARG_SAVE")
+    )
 
     args = parser.parse_args(remaining)
 
@@ -134,11 +138,15 @@ def main():
             print(_("MSG_PROCESSING_CODEID").format(codeid=codeid))
 
         # Store the CodeID in PostgreSQL and get its internal ID
-        try:
-            codeid_id, is_new = data_manager.store_codeid(codeid, args.verbose)
-        except Exception as e:
-            print(_("ERR_STORING_CODEID").format(codeid=codeid, error=str(e)))
-            continue
+        if args.save == 1:
+            try:
+                codeid_id, is_new = data_manager.store_codeid(codeid, args.verbose)
+            except Exception as e:
+                print(_("ERR_STORING_CODEID").format(codeid=codeid, error=str(e)))
+                continue
+        else:
+            # Dry-run mode: do not write to PostgreSQL. Use a placeholder ID.
+            codeid_id, is_new = (-1, False)
 
         # Fetch sensor data for this CodeID
         try:
@@ -185,27 +193,53 @@ def main():
                 if args.verbose >= 1:
                     print(_("WARN_NO_SEGMENTS_LEG").format(codeid=codeid, foot='Left'))
             else:
-                activity_refL = data_manager.transform_activityleg(activity_segL)
+                if args.save == 1:
+                    activity_refL = data_manager.transform_activityleg(activity_segL)
+                else:
+                    # Dry-run: perform minimal in-memory normalization (no DB lookups)
+                    activity_segL.rename(columns={'DeviceName':'device_name','Foot':'foot'}, inplace=True)
+                    activity_segL['codeid_id'] = codeid_id
+                    activity_refL = None
 
             if activity_segR.empty:
                 if args.verbose >= 1:
                     print(_("WARN_NO_SEGMENTS_LEG").format(codeid=codeid, foot='Right'))
             else:
-                activity_refR = data_manager.transform_activityleg(activity_segR)
+                if args.save == 1:
+                    activity_refR = data_manager.transform_activityleg(activity_segR)
+                else:
+                    # Dry-run: perform minimal in-memory normalization (no DB lookups)
+                    activity_segR.rename(columns={'DeviceName':'device_name','Foot':'foot'}, inplace=True)
+                    activity_segR['codeid_id'] = codeid_id
+                    activity_refR = None
 
             # Store activity_leg segments
             if not activity_segL.empty:
-                ids = data_manager.store_data("activity_leg", activity_refL)
+                if args.save == 1:
+                    ids = data_manager.store_data("activity_leg", activity_refL, verbose=args.verbose)
+                    n_ref = len(activity_refL)
+                else:
+                    # Dry-run: emulate inserted IDs
+                    ids = list(range(1, len(activity_segL) + 1))
+                    n_ref = len(activity_segL)
+
                 activity_segL['codeleg_id'] = ids
                 if args.verbose >= 2:
-                    print(_("INFO_SEGMENTS_STORED").format(n=len(activity_refL)))
+                    print(_("INFO_SEGMENTS_STORED").format(n=n_ref))
                     print(activity_segL.head(args.head_rows))
 
             if not activity_segR.empty:
-                ids = data_manager.store_data("activity_leg", activity_refR)
+                if args.save == 1:
+                    ids = data_manager.store_data("activity_leg", activity_refR, verbose=args.verbose)
+                    n_ref = len(activity_refR)
+                else:
+                    # Dry-run: emulate inserted IDs (offset to avoid overlap with Left)
+                    ids = list(range(100000, 100000 + len(activity_segR)))
+                    n_ref = len(activity_segR)
+
                 activity_segR['codeleg_id'] = ids
                 if args.verbose >= 2:
-                    print(_("INFO_SEGMENTS_STORED").format(n=len(activity_refR)))
+                    print(_("INFO_SEGMENTS_STORED").format(n=n_ref))
                     print(activity_segR.head(args.head_rows))
 
             # Compute intersection between left/right segments
@@ -214,7 +248,8 @@ def main():
                 merged = codeid_processor.merge_activity_legs_to_all(
                     activity_segR, activity_segL, intersections
                 )
-                data_manager.store_data("activity_all", merged)
+                if args.save == 1:
+                    data_manager.store_data("activity_all", merged, verbose=args.verbose)
                 if args.verbose >= 2:
                     print(_("INFO_MERGED_STORED").format(n=len(merged)))
                     print(merged.head(args.head_rows))

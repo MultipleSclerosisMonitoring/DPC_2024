@@ -20,6 +20,13 @@ class DataManager:
         :param config_path: Path to the YAML configuration file.
         :type config_path: str
         """
+        # Initialize attributes early so __del__ never fails even if init raises.
+        self.config: Dict = {}
+        self.pg_conn: Optional[psycopg2.extensions.connection] = None
+        self.influxdb_client: Optional[InfluxDBClient] = None
+        self.bucket: str = ""
+        self.measurement: str = ""
+
         self.config = self.load_config(config_path)
 
         # Configure PostgreSQL connection
@@ -35,10 +42,17 @@ class DataManager:
         self.bucket: str = self.config["influxdb"]["bucket"]
         self.measurement: str = self.config['influxdb']['measurement']
 
-    def __del__(self)-> None:
+    def __del__(self) -> None:
         """Ensure all connections are closed on deletion."""
-        self.close_influxdb()
-        self.close_pg()
+        # Never raise in destructors (it creates noisy 'Exception ignored in ...').
+        try:
+            self.close_influxdb()
+        except Exception:
+            pass
+        try:
+            self.close_pg()
+        except Exception:
+            pass
 
     def load_config(self, config_path: str) -> Dict:
         """
@@ -86,16 +100,20 @@ class DataManager:
 
     def close_pg(self) -> None:
         """Closes the PostgreSQL connection."""
-        self.pg_conn.close()
+        if self.pg_conn is not None and getattr(self.pg_conn, "closed", 1) == 0:
+            self.pg_conn.close()
 
     def close_influxdb(self) -> None:
         """Closes the InfluxDB client."""
-        self.influxdb_client.close()
+        if self.influxdb_client is not None:
+            self.influxdb_client.close()
 
     def close_all(self) -> None:
         """Closes both PostgreSQL and InfluxDB connections."""
-        self.pg_conn.close()
-        self.influxdb_client.close()
+        if self.pg_conn is not None and getattr(self.pg_conn, "closed", 1) == 0:
+            self.pg_conn.close()
+        if self.influxdb_client is not None:
+            self.influxdb_client.close()
 
     def get_influx_client(self) -> InfluxDBClient:
         """
@@ -212,6 +230,11 @@ class DataManager:
                 'codeid_ids', 'codeleg_ids', 'active_legs']
         """
         if ids is not None:
+            # Defensive: empty list of IDs should return an empty DataFrame, not an invalid SQL "IN ()"
+            if len(ids) == 0:
+                if verbose >= 1:
+                    print(i18n._("WARN_NO_SEGMENTS_FOUND"))
+                return pd.DataFrame(columns=["id","start_time","end_time","duration","codeid_ids","codeleg_ids","active_legs"])
             if verbose >= 1:
                 print(i18n._("INFO_SEGMENTS_BY_IDS").format(ids=ids))
             ids_str = ", ".join(map(str, ids))
