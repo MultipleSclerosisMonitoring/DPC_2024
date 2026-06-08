@@ -1,124 +1,161 @@
 # msTools
 
-Shared utility module for MS Monitoring: YAML configuration management, InfluxDB/PostgreSQL interaction, data models, internationalization, and time utilities.
+Shared utility package for the MS Monitoring project.
 
-## Architecture Overview
+`msTools` provides the infrastructure used by the rest of the repository:
+configuration loading, time normalization, internationalization, shared
+Pydantic models, and database access for both InfluxDB and PostgreSQL.
 
-![Class Diagram: DataManager and its collaborators](../static/class_msTools.png)
+## Responsibilities
 
-*Class Diagram: `DataManager` and its connections to Pydantic models, `timeutils`, and `i18n`.*
+The package centers on `DataManager`, which is responsible for:
 
-## Core Components
+- loading `config.yaml`
+- creating and closing PostgreSQL and InfluxDB connections
+- retrieving CodeIDs from InfluxDB
+- retrieving `activity_all` windows from PostgreSQL
+- expanding bilateral windows into leg-level rows
+- validating and storing semantic tables with idempotent inserts
+- updating GPS-related fields in `effective_gait` when required
 
-- **DataManager** (`data_manager.py`)  
-  - `__init__(config_path: str)`  
-  - `load_config(config_path: str) -> Dict`  
-  - `get_config(section: str) -> Dict`  
-  - `get_codeids_in_range(start_datetime: str, end_datetime: str) -> List[str]`  
-  - `segments_retrieval(fstart: Optional[str], fend: Optional[str], ids: Optional[List[int]], verbose: int) -> pd.DataFrame`  
-  - `recover_activity_all(act: pd.DataFrame, vb: int) -> pd.DataFrame`  
-  - `transform_activityleg(data: pd.DataFrame) -> pd.DataFrame`  
-  - `store_data(table_name: str, data: pd.DataFrame, verbose: int) -> List[int]`  
-  - `get_real_codeid(codeid_id: int) -> str`  
-  - Manages InfluxDB and PostgreSQL connections and closing logic.
+It also includes:
 
-- **Pydantic Models** (`models.py`)  
-  - `CodeID`  
-  - `ActivityLeg`  
-  - `ActivityAll`
+- `models.py` for shared Pydantic models
+- `timeutils.py` for UTC normalization
+- `i18n.py` for gettext-based translations
 
-- **Time Utilities** (`timeutils.py`)  
-  - `ensure_utc(ts: str | datetime) -> pd.Timestamp`
+## Main Components
 
-- **Internationalization** (`i18n.py`)  
-  - `init_translation(locale: str) -> None`  
-  - `_()` helper for translated messages
+### `DataManager` (`data_manager.py`)
 
-## Installation
+Main methods include:
 
-This module is included in the main **ms_monitoring** package. After cloning or installing via `pip` or `poetry`:
+- `__init__(config_path: str) -> None`
+- `load_config(config_path: str) -> dict[str, Any]`
+- `get_config(sect: str) -> dict[str, Any] | None`
+- `get_influx_client() -> InfluxDBClient`
+- `get_codeids_in_range(start_datetime: str, end_datetime: str) -> list[str]`
+- `fetch_data(query: str) -> pandas.DataFrame`
+- `segments_retrieval(fstart: str | None = None, fend: str | None = None, ids: list[int] | None = None, verbose: int = 0) -> pandas.DataFrame`
+- `recover_activity_all(act: pandas.DataFrame, verbose: int = 0) -> pandas.DataFrame`
+- `store_codeid(codeid: str, verbose: int = 0) -> tuple[int, bool]`
+- `transform_activityleg(data: pandas.DataFrame) -> pandas.DataFrame`
+- `store_data(table_name: str, data: pandas.DataFrame, verbose: int = 1) -> list[int]`
+- `get_real_codeid(codeid_id: int) -> str`
+- `get_codeid_id_by_value(codeid: str) -> int | None`
+- `get_record_all_legs(clegs: set, clname: str = "codeleg_ids") -> pandas.DataFrame`
+- `get_activity_ids_by_start_date_range(start_datetime: str | datetime, end_datetime: str | datetime) -> list[int]`
+- `close_pg() -> None`
+- `close_influxdb() -> None`
+- `close_all() -> None`
 
-```bash
-# Using Poetry
-poetry install
+### `models.py`
 
-# Or with pip
-pip install ms_monitoring
+Shared Pydantic models used before writing data to PostgreSQL:
+
+- `CodeID`
+- `ActivityLeg`
+- `ActivityAll`
+
+### `timeutils.py`
+
+Contains:
+
+- `ensure_utc(ts: str | pandas.Timestamp | datetime) -> pandas.Timestamp`
+
+This helper converts local or timezone-aware timestamps into UTC-aware pandas
+timestamps, which is essential for keeping PostgreSQL and InfluxDB queries
+consistent.
+
+### `i18n.py`
+
+Provides lightweight internationalization helpers:
+
+- `detect_language(...)`
+- `available_languages(...)`
+- `init_translation(...)`
+- `set_locale_for_formatting(...)`
+- `gettext(...)`
+
+## How `msTools` fits into the pipeline
+
+`msTools` supports both major stages of the repository workflow:
+
+### Stage 1: bottom-up semantic construction
+
+- raw wearable data is queried from InfluxDB
+- `activity_leg` is built per foot
+- bilateral overlaps are merged into `activity_all`
+
+### Stage 2: movement and gait detection
+
+- `activity_all` windows are read back from PostgreSQL
+- bilateral windows are expanded into per-leg rows
+- downstream modules derive `effective_movement`
+- bilateral gait events are stored in `effective_gait`
+- `effective_gait` may be enriched with GPS metrics
+
+## Configuration
+
+The package reads configuration from the project-level `config.yaml`.
+
+Example:
+
+```yaml
+influxdb:
+  url: "https://<HOST>:8086"
+  token: "<YOUR_TOKEN>"
+  org: "<ORG>"
+  bucket: "<BUCKET>"
+  measurement: "<MEASUREMENT>"
+  verify: false
+  timeout: 900000
+
+postgresql:
+  host: "<PG_HOST>"
+  port: 5432
+  user: "<USER>"
+  password: "<PASSWORD>"
+  database: "<DB_NAME>"
 ```
 
-## Usage
-
-### 1. DataManager
+## Usage example
 
 ```python
 from msTools.data_manager import DataManager
 
-# Initialize with your YAML configuration
-dm = DataManager(config_path='config.yaml')
+manager = DataManager(config_path="config.yaml")
 
-# Create/verify tables in PostgreSQL
-dm.check_and_create_tables('msTools/create_tables.sql')
-
-# Execute a SQL query and get a DataFrame
-df = dm.fetch_data('SELECT * FROM codeids;')
-print(df.head())
-```
-
-### 2. Time Utilities
-
-```python
-from msTools.timeutils import ensure_utc
-
-ts_utc = ensure_utc('2024-06-15 12:00:00')
-print(ts_utc)  # e.g. 2024-06-15 10:00:00+00:00 (assumes Europe/Madrid)
-```
-
-### 3. Internationalization
-
-```python
-from msTools import i18n
-
-# Initialize translations to English
-i18n.init_translation('en')
-
-# Use the helper _
-print(i18n._("PGSQL-CONN-ERR").format(e="timeout"))
-```
-
-### 4. Pydantic Models
-
-```python
-from msTools.models import ActivityLeg
-
-leg = ActivityLeg(
-    codeid_id=1,
-    foot='Left',
-    start_time='2024-06-15T10:00:00Z',
-    end_time='2024-06-15T10:01:00Z',
-    duration=60.0,
-    total_value=100.0
+codeids = manager.get_codeids_in_range(
+    "2025-05-11 00:00:00",
+    "2025-05-12 00:00:00",
 )
-print(leg.json())
+print(codeids)
+
+manager.close_all()
 ```
 
-## Quick CLI One-Liner
+## Notes
 
-Even without a dedicated script, you can run a quick check via `python -c`:
+- semantic timestamps are handled with timezone awareness
+- PostgreSQL inserts are validated with Pydantic models
+- the storage logic is designed to be idempotent for the main semantic tables
+- `effective_gait` may include GPS enrichment fields such as distance, elapsed time, average speed, and validation flag
+
+## Documentation
+
+Full Sphinx documentation is available in `docs/`.
 
 ```bash
-python - << 'EOF'
-from msTools.data_manager import DataManager
-dm = DataManager('config.yaml')
-print(dm.fetch_data('SELECT COUNT(*) FROM codeids;'))
-EOF
+cd docs
+make html
 ```
 
-## Contributing
+## Requirements
 
-1. Fork and create a branch: `git checkout -b feature/your-feature`  
-2. Add tests and update this README if needed  
-3. Open a pull request
+- Python 3.11
+- project dependencies installed through `poetry install` or `pip install -r requirements.txt`
 
 ## License
 
-MIT License. See [LICENSE](../LICENSE) for details.
+MIT License. See the root `LICENSE` file for details.

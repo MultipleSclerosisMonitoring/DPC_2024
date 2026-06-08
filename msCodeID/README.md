@@ -1,50 +1,89 @@
 # msCodeID
 
-Python module for processing wearable device CodeIDs.
+The **msCodeID** package implements the first semantic stage of the repository.
 
-## Architecture Overview
+Its role is to retrieve wearable references from InfluxDB, identify contiguous
+activity segments for each foot, and prepare the bilateral semantic structures
+that are later stored in PostgreSQL as `activity_leg` and `activity_all`.
 
-![Class Diagram: CodeIDProcessor ↔ DataManager](../static/class_msCodeID.png)
+## Responsibilities
 
-*Class Diagram: `CodeIDProcessor` and its connection to `DataManager`*
+The package centers on the `CodeIDProcessor` class, which is responsible for:
 
-The **msCodeID** package centers on the `CodeIDProcessor` class, which orchestrates fetching raw sensor data, identifying activity segments, and preparing them for database storage.
+- retrieving CodeID-level wearable reference data from InfluxDB
+- identifying contiguous activity segments for the left and right foot
+- building per-leg semantic frames compatible with `activity_leg`
+- computing bilateral temporal overlaps between both legs
+- building bilateral semantic frames compatible with `activity_all`
 
-## Core Components
+This means `msCodeID` is the module that performs the **bottom-up semantic
+construction** required before the gait-detection stage begins.
 
-- **CodeIDProcessor** (`codeid_processor.py`)
-  - `__init__(data_manager: DataManager)`
-  - `fetch_codeid_data(codeid: str, start_datetime: str, end_datetime: str) -> pandas.DataFrame`
-  - `identify_activity_segments(df: pandas.DataFrame, threshold_seconds: float, foot: str) -> pandas.DataFrame`
-  - `inter_segs(sg1: pandas.DataFrame, sg2: pandas.DataFrame) -> pandas.DataFrame`
-  - `merge_activity_legs_to_all(act_segR: pandas.DataFrame, act_segL: pandas.DataFrame, inter: pandas.DataFrame) -> pandas.DataFrame`
-  - `save_to_postgresql(table_name: str, df: pandas.DataFrame) -> None`
+## Core Component
 
-- **Pydantic Models** (`msGait.models`):
-  - `ActivitySegment`
+### `CodeIDProcessor` (`codeid_processor.py`)
 
-## Requirements
+Main public methods include:
 
-- Python 3.12 or higher
-- Dependencies (installed via project):
-  - `influxdb-client>=1.35.0`
-  - `pandas>=2.0.0`
-  - `pydantic>=1.10.0`
-  - `PyYAML>=6.0`
+- `__init__(data_manager: DataManager, verbose: int = 0) -> None`
+- `fetch_codeid_data(codeid: str, start_datetime: datetime, end_datetime: datetime) -> pandas.DataFrame`
+- `identify_activity_segments(df: pandas.DataFrame, threshold_seconds: float = 70, foot: str = "Left") -> pandas.DataFrame`
+- `build_activity_leg_frames(sensor_data: pandas.DataFrame, codeid_id: int, gap_threshold_seconds: float = 80.0) -> tuple[pandas.DataFrame, pandas.DataFrame, pandas.DataFrame, pandas.DataFrame]`
+- `build_activity_all_frame(activity_seg_right_merge: pandas.DataFrame, activity_seg_left_merge: pandas.DataFrame) -> pandas.DataFrame`
+- `inter_segs(sg1: pandas.DataFrame, sg2: pandas.DataFrame) -> pandas.DataFrame`
+- `merge_activity_legs_to_all(act_segR: pandas.DataFrame, act_segL: pandas.DataFrame, inter: pandas.DataFrame) -> pandas.DataFrame`
+- `save_to_postgresql(table_name: str, df: pandas.DataFrame) -> None`
+
+## How it fits into the pipeline
+
+The repository workflow is divided into two main stages:
+
+### Stage 1: semantic construction
+
+Handled by `msCodeID` and the CLI script `find_mscodeids`.
+
+Flow:
+
+1. retrieve distinct `CodeID` values from InfluxDB
+2. fetch wearable reference data for each `CodeID`
+3. split the stream by foot (`Left` / `Right`)
+4. build contiguous per-leg activity segments
+5. store those segments as `activity_leg`
+6. compute bilateral overlaps
+7. store those overlaps as `activity_all`
+
+### Stage 2: movement and gait detection
+
+Handled later by `msGait` and `find_gait`.
+
+That second stage reads the previously built `activity_all` rows and derives:
+
+- `effective_movement`
+- `effective_gait`
+- GPS-enriched gait metrics
 
 ## Configuration
 
-Reads InfluxDB settings from `config.yaml`:
+`msCodeID` relies on the shared project-level `config.yaml`.
+
+Relevant sections include:
 
 ```yaml
 influxdb:
-  org: 'UPM'
-  bucket: 'Gait/autogen'
-  measurement: 'Gait'
   url: "https://<HOST>:8086"
   token: "<YOUR_TOKEN>"
+  org: "<ORG>"
+  bucket: "<BUCKET>"
+  measurement: "<MEASUREMENT>"
   verify: false
   timeout: 900000
+
+postgresql:
+  host: "<PG_HOST>"
+  port: 5432
+  user: "<USER>"
+  password: "<PASSWORD>"
+  database: "<DB_NAME>"
 ```
 
 ## Usage in Python
@@ -53,37 +92,52 @@ influxdb:
 from msTools.data_manager import DataManager
 from msCodeID.codeid_processor import CodeIDProcessor
 
-dm = DataManager(config_path="config.yaml")
-processor = CodeIDProcessor(dm)
+manager = DataManager(config_path="config.yaml")
+processor = CodeIDProcessor(manager, verbose=1)
 
 df = processor.fetch_codeid_data(
-    codeid="DEVICE123",
-    start_datetime="2024-01-01 00:00:00",
-    end_datetime="2024-01-02 00:00:00"
+    codeid="JB20250511-47",
+    start_datetime="2025-05-11 00:00:00",
+    end_datetime="2025-05-12 00:00:00",
 )
+
 print(df.head())
+
+manager.close_all()
 ```
 
 ## CLI Integration
 
-While **msCodeID** does not expose its own CLI, it is used within the `find_mscodeids` script:
+Although **msCodeID** does not expose its own standalone CLI, it is used directly
+by the `find_mscodeids` command:
 
 ```bash
-python -m ms_monitoring.find_mscodeids -c config.yaml -f "2024-01-01 00:00:00" -u "2024-01-02 00:00:00" -v 1
+python -m ms_monitoring.find_mscodeids \
+  -c config.yaml \
+  -f "2025-05-11 00:00:00" \
+  -u "2025-05-12 00:00:00" \
+  --save 1 \
+  -v 2
 ```
 
-## File Structure
+This command may generate:
 
-- `codeid_processor.py`: Main processing class.
-- `__init__.py`
+- rows in `codeids`
+- rows in `activity_leg`
+- rows in `activity_all`
 
-## Contributing
+## Notes
 
-Contributions are welcome:
+- timestamps are normalized through the shared `ensure_utc(...)` utility
+- activity segmentation is gap-based
+- zero-duration segments are filtered out
+- bilateral activity is built through temporal intersection of left and right legs
+- this package depends on `msTools` for database access and shared infrastructure
 
-1. Fork the repository.
-2. Create a branch: `git checkout -b feature/your-feature`.
-3. Make changes and open a pull request.
+## Requirements
+
+- Python 3.11
+- project dependencies installed through `poetry install` or `pip install -r requirements.txt`
 
 ## License
 

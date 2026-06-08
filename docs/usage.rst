@@ -1,59 +1,123 @@
-.. _usage:
-
 Usage
 =====
 
-After installing the **ms_monitoring** package, run the CLI scripts as Python modules.
-The typical workflow is:
+This section describes the practical execution flow of the repository.
 
-1. **Retrieve and store CodeIDs and activity segments**
-2. **Detect effective movement windows and gait episodes**
+The project is intended to be run in two consecutive stages:
 
-Retrieving CodeIDs and Activity Segments
-----------------------------------------
+1. build semantic candidate windows from raw wearable data
+2. detect movement and gait over those stored semantic windows
 
-Retrieves unique CodeIDs from InfluxDB within a specified date range, identifies
-activity segments for each foot, and stores them in PostgreSQL tables
-(`activity_leg` and `activity_all`).
+Execution order
+---------------
 
-.. code-block:: console
+The normal order is:
 
-    python -m ms_monitoring.find_mscodeids \
-      -c config.yaml \
-      -f "2024-06-01 00:00:00" \
-      -u "2024-06-30 23:59:59" \
-      -l en \
-      --save 1 \
-      -v 2 \
-      --head-rows 10
+1. run ``find_mscodeids``
+2. verify that ``activity_leg`` and ``activity_all`` were created correctly
+3. run ``find_gait``
+4. inspect ``effective_movement`` and ``effective_gait``
+5. optionally run the ground-truth validation utilities in ``tests``
 
-For full argument details and examples, see :ref:`find_mscodeids`.
+Stage 1: semantic construction
+------------------------------
 
-Detecting Effective Movement and Gait
--------------------------------------
+Use ``find_mscodeids`` to retrieve CodeIDs from InfluxDB and construct the
+semantic tables required by the gait stage.
 
-Analyzes stored activity segments to detect effective movement windows for each
-foot and overlapping gait episodes, optionally exporting raw sensor data and
-saving results back to the database.
+Example:
 
-.. code-block:: console
+.. code-block:: bash
 
-    # Option A: process explicit activity_all IDs
-    python -m ms_monitoring.find_gait \
-      -i 12,34,56 \
-      -c config.yaml \
-      -l en \
-      --output raw_data.xlsx \
-      --save 1 \
-      -v 2 \
-      --head-rows 5
+   python -m ms_monitoring.find_mscodeids \
+     -c config.yaml \
+     -f "2025-05-11 00:00:00" \
+     -u "2025-05-12 00:00:00" \
+     --save 1 \
+     -v 2
 
-    # Option B: if --ids is omitted, process the last N hours (default: 25)
-    python -m ms_monitoring.find_gait \
-      -c config.yaml \
-      --hours-back 48 \
-      -l en \
-      --save 0 \
-      -v 1
+This stage may generate:
 
-For full argument details and examples, see :ref:`find_gait`.
+- rows in ``codeids``
+- rows in ``activity_leg``
+- rows in ``activity_all``
+
+Stage 2: movement and gait detection
+------------------------------------
+
+Use ``find_gait`` to process previously created ``activity_all`` windows.
+
+Example using explicit IDs:
+
+.. code-block:: bash
+
+   python -m ms_monitoring.find_gait \
+     -c config.yaml \
+     -i "152" \
+     --save 1 \
+     -v 2
+
+Example using a recent time window:
+
+.. code-block:: bash
+
+   python -m ms_monitoring.find_gait \
+     -c config.yaml \
+     --hours-back 25 \
+     --save 0 \
+     -v 1
+
+This stage may generate:
+
+- rows in ``effective_movement``
+- rows in ``effective_gait``
+- GPS enrichment fields inside ``effective_gait``:
+  ``gps_points``, ``gps_distance_m``, ``gps_elapsed_sec``,
+  ``gps_avg_speed_m_s``, and ``gps_validated``
+
+Dry-run workflow
+----------------
+
+Both CLI tools support a dry mode through ``--save 0``.
+
+This is useful when you want to:
+
+- inspect intermediate outputs without modifying PostgreSQL
+- debug a time range
+- validate that segmentation or gait detection behaves as expected before persistence
+
+Validation workflow
+-------------------
+
+The repository also includes a ground-truth validation utility based on an Excel
+file with manually labeled windows.
+
+Example:
+
+.. code-block:: bash
+
+   python -m tests.validate_ground_truth \
+     -e path/to/ground_truth.xlsx \
+     -c config.yaml \
+     -l es
+
+This validation stage compares the algorithm output against manually labeled
+windows and reports metrics such as:
+
+- accuracy
+- precision
+- recall / sensitivity
+- specificity
+- F1-score
+- Cohen's Kappa
+- confusion matrix
+
+Operational notes
+-----------------
+
+- timestamps are normalized before database queries
+- the gait stage depends on ``activity_all`` already existing
+- inertial analysis is performed on resampled data
+- gait rows are GPS-enriched before final storage
+- repeated executions are designed to avoid uncontrolled duplication in the
+  main semantic output tables

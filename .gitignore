@@ -4,6 +4,7 @@ __pycache__/
 *$py.class
 *.__pycache__
 *.pyc
+*.pyo
 
 # Distribution / packaging
 dist/
@@ -28,13 +29,24 @@ site/
 # Logs
 *.log
 
-# dotenv
+# Environment / local configuration
 .env
+.config.yaml
+.config*.yaml
 
 # Jupyter
 .ipynb_checkpoints/
 
-.config*.yaml
+# Generated outputs
+outs/
+*.zip
 
 # Output files
 outs/*
+
+# Generated Excel outputs
+tests/ground_truth_results.xlsx
+tests/ground_truth_windows.xlsx
+tests/*.tmp.xlsx
+
+tests/ground_truth_labeled_completed.xlsx

@@ -1,127 +1,150 @@
-.. _find_gait:
-
 find_gait
 =========
 
-Utility to detect and store effective gait periods based on segments
-in the ``activity_all`` table of PostgreSQL.
+The ``find_gait`` command-line tool is the second executable stage of the
+pipeline. It reads bilateral activity windows from PostgreSQL, retrieves raw
+inertial data from InfluxDB, detects effective movement in each leg, derives
+bilateral gait episodes, enriches those episodes with GPS-based metrics, and
+optionally stores the results in PostgreSQL.
 
-**Location:** ``ms_monitoring/find_gait.py``
+Purpose
+-------
 
-.. graphviz::
-  :caption: Simplified Flow for `find_gait`
-  :align: center
+This command performs the movement and gait detection stage of the project:
 
-  digraph find_gait_flow {
-    rankdir=LR;
-    graph [fontname="Helvetica"];
-    node  [shape=box, fontname="Helvetica"];
-    edge  [fontname="Helvetica"];
+1. retrieve candidate bilateral windows from ``activity_all``
+2. expand those windows into one row per leg
+3. fetch raw inertial signals for each leg from InfluxDB
+4. resample the inertial series to a fixed temporal grid
+5. detect ``effective_movement`` from spectral and temporal criteria
+6. intersect left and right effective movement to derive ``effective_gait``
+7. enrich gait intervals with GPS-derived metrics
+8. optionally store ``effective_movement`` and ``effective_gait``
 
-    // Actors and services
-    User         [label="User"];
-    FindGait_CLI [label="find_gait CLI"];
-    Movement     [label="MovementDetector"];
-    DataMgr      [label="DataManager"];
-    InfluxDB     [label="InfluxDB"];
-    PostgreSQL   [label="PostgreSQL"];
+Input modes
+-----------
 
-    // Main sequence
-    User -> FindGait_CLI [label="run `python -m ms_monitoring.find_gait`"];
-    FindGait_CLI -> Movement [label="__init__(ids|time_window, config)"];
-    Movement -> DataMgr    [label="load stored segments"];
-    DataMgr -> PostgreSQL  [label="SELECT * FROM activity_all"];
-    Movement -> InfluxDB   [label="fetch raw sensor data"];
-    InfluxDB -> Movement   [label="raw DataFrame"];
-    Movement -> Movement   [label="process segments\n(fetch → compute → detect)"];
-    Movement -> DataMgr    [label="save results (optional)"];
-    DataMgr -> PostgreSQL  [label="INSERT effective_movement + gait"];
-    Movement -> FindGait_CLI[label="return results"];
-    FindGait_CLI -> User    [label="print summaries"];
-  }
+The command supports two retrieval modes.
 
-Usage
------
+**Explicit ID mode**
 
-Run as a module from your virtual environment:
+Provide one or more ``activity_all`` IDs with ``-i`` / ``--ids``:
 
 .. code-block:: bash
 
-    # Option A: process explicit activity_all IDs
-    python -m ms_monitoring.find_gait \
-      -i 12,34,56 \
-      -c config.yaml \
-      -l en \
-      --output raw_data.xlsx \
-      --save 1 \
-      -v 2
+   python -m ms_monitoring.find_gait \
+     -c config.yaml \
+     -i "1,5,10-15" \
+     --save 1 \
+     -v 2
 
-    # Option B: if --ids is omitted, process the last N hours (default: 25)
-    python -m ms_monitoring.find_gait \
-      -c config.yaml \
-      --hours-back 48 \
-      -l en \
-      --save 0 \
-      -v 1
+**Recent-hours mode**
+
+If ``--ids`` is omitted, the command retrieves candidate windows from the last
+``N`` hours:
+
+.. code-block:: bash
+
+   python -m ms_monitoring.find_gait \
+     -c config.yaml \
+     --hours-back 25 \
+     --save 0 \
+     -v 1
 
 Arguments
 ---------
 
-- ``-i, --ids``
-  Range/list specification of ``activity_all`` record IDs.
-  Supported formats: ``1-271`` or ``1,5,10-15``.
-  If omitted, the script falls back to ``--hours-back``.
+The tool accepts the following arguments:
 
-- ``--hours-back``
-  If ``--ids`` is omitted, look back the last N hours (UTC window).
-  Default: ``25``.
+- ``-c, --config``: path to ``config.yaml`` (required)
+- ``-i, --ids``: range/list of ``activity_all`` IDs
+- ``-l, --lang``: interface language (``es`` or ``en``)
+- ``-o, --output``: optional XLSX export of raw sensor data
+- ``-v, --verbose``: verbosity level
+- ``--head-rows``: number of preview rows to print
+- ``--hours-back``: fallback time window when ``--ids`` is omitted
+- ``--save``: whether to persist results in PostgreSQL (``1``) or run in dry mode (``0``)
 
-- ``-c, --config``
-  Path to the YAML configuration file. (required)
+High-level execution flow
+-------------------------
 
-- ``-l, --lang``
-  Interface language (``en``, ``es``). Default: ``es``.
+The command performs the following steps:
 
-- ``-o, --output``
-  Optional path to an Excel file where raw sensor data will be exported.
+1. initialize translations
+2. create a ``MovementDetector``
+3. retrieve bilateral candidate windows from ``activity_all``
+4. expand them into one row per leg
+5. detect per-leg ``effective_movement``
+6. optionally store ``effective_movement``
+7. detect bilateral ``effective_gait``
+8. validate/enrich gait intervals with GPS-derived metrics
+9. optionally store ``effective_gait``
 
-- ``--save``
-  Persist results to PostgreSQL: ``--save 1`` (default) writes to
-  ``effective_movement`` and ``effective_gait``; ``--save 0`` runs in dry-run mode.
+Detection details
+-----------------
 
-- ``-v, --verbose``
-  Verbosity level (0: none, 1: info, 2: debug).
+The inertial stage is based on:
 
-- ``--head-rows``
-  Number of rows to display when verbosity ≥ 2. Default: 8.
+- raw accelerometer and gyroscope signals
+- fixed-rate resampling before analysis
+- magnitude computation for acceleration and gyroscope
+- Welch spectral power inside a configurable frequency band
+- temporal continuity criteria
+- merging of nearby valid windows
+- minimum-duration filtering
 
-Examples
---------
+The gait stage is based on:
 
-Detailed output, export raw data, and save to database::
+- temporal overlap between left and right effective-movement intervals
+- minimum gait-duration filtering
+- optional GPS enrichment using distance, elapsed time, average speed, and a
+  boolean validation flag
 
-  $ python -m ms_monitoring.find_gait \
-      -i 12,34,56 \
-      -c config.yaml \
-      -l en \
-      --output raw_data.xlsx \
-      --save 1 \
-      -v 2 \
-      --head-rows 3
+GPS enrichment
+--------------
 
-Dry-run (no PostgreSQL writes)::
+Each detected gait interval may be enriched with the following fields:
 
-  $ python -m ms_monitoring.find_gait \
-      -i 78,90 \
-      -c config.yaml \
-      --save 0 \
-      -v 1
+- ``gps_points``
+- ``gps_distance_m``
+- ``gps_elapsed_sec``
+- ``gps_avg_speed_m_s``
+- ``gps_validated``
 
-Time-window mode (last 48 hours)::
+These values are derived from the GPS trace associated with the same
+participant and time interval.
 
-  $ python -m ms_monitoring.find_gait \
-      -c config.yaml \
-      --hours-back 48 \
-      -l en \
-      --save 0 \
-      -v 1
+Dry-run mode
+------------
+
+When ``--save 0`` is used:
+
+- the full detection pipeline is still executed
+- results are printed for inspection
+- no rows are written to PostgreSQL
+
+Typical outputs
+---------------
+
+The command may generate:
+
+- per-leg rows in ``effective_movement``
+- bilateral rows in ``effective_gait`` enriched with GPS metrics
+
+Implementation notes
+--------------------
+
+- timestamps are normalized consistently before querying the databases
+- inertial data is resampled before windowing to mitigate packet loss and
+  improve temporal alignment
+- the final partial inertial window can be kept when it is large enough
+- GPS enrichment is part of the final pipeline before storing
+  ``effective_gait``
+
+API reference
+-------------
+
+.. automodule:: ms_monitoring.find_gait
+   :members:
+   :undoc-members:
+   :show-inheritance:

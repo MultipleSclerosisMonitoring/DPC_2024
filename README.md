@@ -3,52 +3,67 @@
 
 # MS Monitoring
 
-Modular Python utilities for monitoring wearable devices  
-in multiple sclerosis studies.
+Modular Python utilities for processing wearable-device data in multiple
+sclerosis monitoring studies.
 
----  
+The repository is organized around a two-stage pipeline:
+
+1. bottom-up semantic construction from raw wearable references
+2. movement and gait detection over previously stored semantic windows
+
+---
+
 ## Table of Contents
 
-1. [High-Level Workflow](#high-level-workflow)  
-2. [Quickstart](#quickstart)  
-3. [Installation](#installation)  
-4. [Configuration](#configuration)  
-5. [Documentation](#documentation)  
-6. [Contributing](#contributing)  
-7. [License](#license)
+1. [High-Level Workflow](#high-level-workflow)
+2. [Directory Structure](#directory-structure)
+3. [Requirements](#requirements)
+4. [Installation](#installation)
+5. [Configuration](#configuration)
+6. [Validation](#validation)
+7. [Documentation](#documentation)
+8. [Contributing](#contributing)
+9. [License](#license)
 
 ---
 
 ## High-Level Workflow
 
-### 1. find_mscodeids
+### 1. `find_mscodeids`
 
-Extracts unique device CodeIDs, identifies activity segments,  
-and persists them to PostgreSQL.
+Extracts distinct device `CodeID` values from InfluxDB, builds `activity_leg`
+(bottom-up per foot), and merges bilateral temporal overlaps into `activity_all`
+for PostgreSQL persistence.
 
-![Sequence Diagram for find_mscodeids](./static/find_mscodeids_flow.png)
+### 2. `find_gait`
 
-### 2. find_gait
-
-Processes stored activity segments, applies power/time-based checks  
-to detect effective movements and gait episodes.
-
-![Sequence Diagram for find_gait](./static/find_gait_flow.png)
+Processes stored `activity_all` windows, retrieves raw inertial signals,
+resamples them to a fixed frequency, applies spectral and temporal checks to
+detect `effective_movement`, derives bilateral `effective_gait`, and enriches
+gait episodes with GPS-based metrics.
 
 ## Directory Structure
 
-```
+```text
 .
-├── config.yaml           # Template for InfluxDB & PostgreSQL
-├── requirements.txt
-├── docs/                 # Sphinx documentation
-├── static/               # CLI workflow diagrams
-├── msTools/              # Shared utilities package
-├── msCodeID/             # CodeID processing package
-├── msGait/               # Gait signal processing package
-├── ms_monitoring/        # CLI entry-point scripts
-└── README.md             # This file
+├── requirements.txt       # Pip dependencies
+├── pyproject.toml         # Poetry project definition
+├── docs/                  # Sphinx documentation
+├── static/                # Reference figures and legacy diagrams
+├── msTools/               # Shared utilities package
+├── msCodeID/              # CodeID extraction and activity segmentation
+├── msGait/                # Movement and gait detection
+├── ms_monitoring/         # CLI entry-point scripts
+├── tests/                 # Ground-truth validation utilities
+└── README.md              # This file
 ```
+
+## Requirements
+
+- Python 3.11
+- PostgreSQL
+- InfluxDB
+- the repository includes a template `config.yaml` file that must be edited locally with your real connection values
 
 ## Installation
 
@@ -72,7 +87,9 @@ pip install -r requirements.txt
 
 ## Configuration
 
-Copy or edit `config.yaml` in the project root:
+The repository includes a template `config.yaml` in the project root.
+
+Replace the `XXX` placeholders with your real local connection values:
 
 ```yaml
 influxdb:
@@ -85,31 +102,77 @@ influxdb:
   timeout:     900000
 
 postgresql:
-  host:     "<PG_HOST>"
-  port:     5432
-  user:     "<USER>"
-  password: "<PASSWORD>"
-  database: "<DB_NAME>"
+  host:        "<PG_HOST>"
+  port:        5432
+  user:        "<USER>"
+  password:    "<PASSWORD>"
+  database:    "<DB_NAME>"
 
 movement:
-  accel_threshold:      0.2
-  gyro_threshold:       0.2
-  power_threshold:      0.5
-  freq_band_min:        0.4
-  freq_band_max:        1.4
-  min_continuous_seconds: 10
+  accel_threshold:            0.2
+  gyro_threshold:             60
+  accel_power_threshold:      0.125
+  gyro_power_threshold:       1000
+  freq_band_min:              0.4
+  freq_band_max:              1.6
+  min_continuous_hits:        3
+  sampling_rate:              47.0
+  resample_hz:                100.0
+  window_size_samples:        256
+  min_window_fraction:        0.5
+  min_effective_duration_sec: 6.0
+  min_gait_duration_sec:      6.0
+  gps_resample_seconds:       10
+  gps_padding_seconds:        15
+  gps_min_points:             2
+  gps_min_distance_m:         3.0
+  gps_min_speed_m_s:          0.2
+  gps_max_speed_m_s:          3.0
 ```
+
+## Notes on the `movement` section
+
+- `sampling_rate` is the nominal acquisition-rate reference
+- `resample_hz` is the fixed interpolation/alignment frequency used before inertial windowing
+- `window_size_samples` controls the analysis-window length in samples
+- `min_window_fraction` allows preserving the last partial analysis window when it is large enough
+- `effective_gait` can be enriched with GPS-derived metrics such as travelled distance, elapsed time, average speed, and a boolean GPS validation flag
+
+## Validation
+
+The repository includes empirical validation utilities in `tests/`, based on a ground-truth Excel file with manually labeled windows.
+
+Example:
+
+```bash
+python -m tests.validate_ground_truth \
+  -e path/to/ground_truth.xlsx \
+  -c config.yaml \
+  -l es
+```
+
+This validation reports metrics such as:
+
+- accuracy
+- precision
+- recall / sensitivity
+- specificity
+- F1-score
+- Cohen's Kappa
+- confusion matrix
 
 ## Documentation
 
-Full Sphinx docs are in `docs/`. To rebuild locally:
+Full Sphinx documentation is available in `docs/`. 
+
+To rebuild locally:
 
 ```bash
 cd docs
 make html
 ```
 
-Open `_build/html/index.html` in your browser.
+Then open `_build/html/index.html` in your browser.
 
 ## Contributing
 

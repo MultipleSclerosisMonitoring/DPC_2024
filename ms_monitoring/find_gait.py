@@ -1,10 +1,7 @@
 import argparse
-import json
-from typing import Optional, List
 from datetime import datetime, timedelta, timezone
 
 from msTools import i18n
-from msTools.data_manager import DataManager
 from msGait.movement_detector import MovementDetector
 
 
@@ -18,14 +15,14 @@ class VAction(argparse.Action):
         else:
             setattr(namespace, self.dest, int(values))
 
-def parse_range_list(rango_str):
+def parse_range_list(rango_str: str) -> list[int]:
     """Convert a string like '1-271' or '1,5,10-15' into a list of integers.
 
     Args:
     rango_str: Range/list specification.
 
     Returns:
-    List[int]: Sorted list of IDs.
+    list[int]: Sorted list of IDs.
     """
     result = set()
     
@@ -51,7 +48,7 @@ def parse_range_list(rango_str):
             except ValueError:
                 raise ValueError(f"Formato de ID inválido: {segment}. Debe ser un número.")
                 
-    return sorted(list(result)) # Devolver la lista ordenada
+    return sorted(result) # Devolver la lista ordenada
 
 
 def _default_last_hours_window(hours_back: int) -> tuple[str, str]:
@@ -61,7 +58,7 @@ def _default_last_hours_window(hours_back: int) -> tuple[str, str]:
     hours_back: Number of hours to look back from *now*.
 
     Returns:
-    Tuple[str, str]: (fstart, fend) as ISO strings with "Z" suffix.
+    tuple[str, str]: (fstart, fend) as ISO strings with "Z" suffix.
     """
     now = datetime.now(timezone.utc)
     start = now - timedelta(hours=hours_back)
@@ -72,7 +69,7 @@ def _default_last_hours_window(hours_back: int) -> tuple[str, str]:
 
 
 
-def main():
+def main() -> None:
     # 1) Pre‐parse only -l/--lang (to avoid showing help prematurely)
     pre = argparse.ArgumentParser(add_help=False)
     pre.add_argument(
@@ -135,7 +132,6 @@ def main():
     use_ids = args.act_all_ids is not None and len(args.act_all_ids) > 0
     fstart, fend = (None, None)
 
-
     if not use_ids:
         # Fallback: last N hours window (defaults to 25h)
         fstart, fend = _default_last_hours_window(args.hours_back)
@@ -146,64 +142,65 @@ def main():
     # Supports either supplying IDs or date ranges
     detector = MovementDetector(
         config_file   = args.config_file,
-        sampling_rate = 50,
         fstart        = fstart,
         fend          = fend,
         ids           = (args.act_all_ids if use_ids else None),
         verbose       = args.verbose
     )
 
-    # If no leg data was retrieved, exit
-    if detector.df_legs.empty:
-        return
+    try:
+        # If no leg data was retrieved, exit
+        if detector.df_legs.empty:
+            return
 
-    if args.verbose >= 1:
-        print(_("FGAIT_1ST"))
-
-    # Detect effective movements per leg
-    df_effective = detector.detect_effective_movement(
-        detector.df_legs,
-        args.fout,
-        args.verbose
-    )
-    if df_effective.empty:
-        print(_("FGAIT_NO_WALK"))
-        return
-
-    if args.verbose >= 2:
-        print(_("FGAIT_WKLS_FND"))
-        print(df_effective.head(args.head_rows))
-
-    # Optionally save effective_movement to PostgreSQL
-    if args.save == 1:
-        detector.save_to_postgresql("effective_movement", df_effective, args.verbose)
         if args.verbose >= 1:
-            print(_("FGAIT_NUM_WALKS").format(ns=len(df_effective)))
+            print(_("FGAIT_1ST"))
 
-    # Detect simultaneous effective gait periods (both feet)
-    df_gait = detector.detect_effective_gait(df_effective, args.verbose)
-    if df_gait.empty:
-        if args.verbose >= 1:
-            print(_("NO_GAIT_PERIODS"))
-    else:
-        if args.verbose >= 1:
-            print(_("GAIT_PERIODS_HEADER"))
-            if args.verbose >= 2:
-                # Indent the DataFrame for clearer display
-                df_string = df_gait.to_string(index=False)
-                indentation = "     "
-                indented = "\n".join(indentation + line for line in df_string.splitlines())
-                print(indented)
+        # Detect effective movements per leg
+        df_effective = detector.detect_effective_movement(
+            detector.df_legs,
+            args.fout,
+            args.verbose
+        )
+        if df_effective.empty:
+            print(_("FGAIT_NO_WALK"))
+            return
 
+        if args.verbose >= 2:
+            print(_("FGAIT_WKLS_FND"))
+            print(df_effective.head(args.head_rows))
+
+        # Optionally save effective_movement to PostgreSQL
         if args.save == 1:
-            detector.save_to_postgresql("effective_gait", df_gait, args.verbose)
+            detector.save_to_postgresql("effective_movement", df_effective, args.verbose)
             if args.verbose >= 1:
-                print(_("GAIT_SAVED_COUNT").format(n=len(df_gait)))
+                print(_("FGAIT_NUM_WALKS").format(ns=len(df_effective)))
 
-    if args.verbose >= 1:
-        print(_("FGAIT_END"))
+        # Detect simultaneous effective gait periods (both feet)
+        df_gait = detector.detect_effective_gait(df_effective, args.verbose)
+        df_gait = detector.validate_gait_with_gps(df_gait, args.verbose)
 
-    detector.close()
+        if df_gait.empty:
+            if args.verbose >= 1:
+                print(_("NO_GAIT_PERIODS"))
+        else:
+            if args.verbose >= 1:
+                print(_("GAIT_PERIODS_HEADER"))
+                if args.verbose >= 2:
+                    df_string = df_gait.to_string(index=False)
+                    indentation = "     "
+                    indented = "\n".join(indentation + line for line in df_string.splitlines())
+                    print(indented)
+
+            if args.save == 1:
+                detector.save_to_postgresql("effective_gait", df_gait, args.verbose)
+                if args.verbose >= 1:
+                    print(_("GAIT_SAVED_COUNT").format(n=len(df_gait)))
+
+        if args.verbose >= 1:
+            print(_("FGAIT_END"))
+    finally:
+        detector.close()
 
 
 if __name__ == "__main__":

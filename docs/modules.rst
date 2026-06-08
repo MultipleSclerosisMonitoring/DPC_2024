@@ -1,43 +1,118 @@
-.. _modules:
+Repository modules
+==================
 
-ms_monitoring package
-=====================
+This section groups the main repository components into their functional roles
+inside the pipeline.
 
-This section describes the **ms_monitoring** project and its principal modules.
+Overview
+--------
 
-Architecture Overview
----------------------
+The project is organized into four main layers:
+
+1. **Shared infrastructure**
+   - ``msTools``
+
+2. **Bottom-up semantic construction**
+   - ``msCodeID``
+   - ``find_mscodeids``
+
+3. **Movement and gait detection**
+   - ``msGait``
+   - ``find_gait``
+
+4. **Validation and supporting utilities**
+   - ``tests`` and auxiliary scripts outside the main package structure
+
+Pipeline view
+-------------
 
 .. graphviz::
-   :caption: Class Diagram for Core Components
+   :caption: Repository module relationships
    :align: center
 
-   digraph class_core {
-      rankdir=TB;
+   digraph repo_modules {
+      rankdir=LR;
       graph [fontname="Helvetica"];
-      node  [shape=record, fontname="Helvetica"];
+      node  [shape=box, fontname="Helvetica"];
       edge  [fontname="Helvetica"];
 
+      msTools         [label="msTools\n(shared infrastructure)"];
+      msCodeID        [label="msCodeID\n(bottom-up semantic construction)"];
+      find_mscodeids  [label="find_mscodeids\nCLI"];
+      msGait          [label="msGait\nmovement and gait detection)"];
+      find_gait       [label="find_gait\nCLI"];
+      tests           [label="tests\nvalidation utilities"];
 
-      CodeIDProcessor [label="{CodeIDProcessor|+ fetch_codeid_data()\l+ identify_activity_segments()\l+ merge_activity_legs_to_all()\l}"];
-      MovementDetector [label="{MovementDetector|+ detect_effective_movement()\l+ detect_effective_gait()\l}"];
-      DataManager [label="{DataManager|+ get_codeids_in_range()\l+ store_data()\l+ segments_retrieval()\l+ recover_activity_all()\l}"];
-
-      CodeIDProcessor -> DataManager;
-      MovementDetector -> DataManager;
+      msTools -> msCodeID;
+      msTools -> msGait;
+      msCodeID -> find_mscodeids;
+      msGait -> find_gait;
+      find_mscodeids -> find_gait;
+      find_gait -> tests;
    }
 
+Module groups
+-------------
 
-Submodules
-----------
-
-The documentation for each component lives in its own `.rst`:
+Shared infrastructure
+~~~~~~~~~~~~~~~~~~~~~
 
 .. toctree::
    :maxdepth: 1
 
-   find_gait
-   find_mscodeids
-   msCodeID
-   msGait
    msTools
+
+Bottom-up semantic construction
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+.. toctree::
+   :maxdepth: 1
+
+   msCodeID
+   find_mscodeids
+
+Movement and gait detection
+~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+.. toctree::
+   :maxdepth: 1
+
+   msGait
+   find_gait
+
+How the pieces fit together
+---------------------------
+
+``msTools``
+   Provides configuration loading, UTC normalization, internationalization,
+   shared models, and PostgreSQL/InfluxDB access.
+
+``msCodeID``
+   Implements the bottom-up construction of semantic activity windows from raw
+   wearable references.
+
+``find_mscodeids``
+   Runs the first executable pipeline stage and stores ``activity_leg`` and
+   ``activity_all``.
+
+``msGait``
+   Implements inertial movement detection, bilateral gait derivation, and GPS
+   enrichment.
+
+``find_gait``
+   Runs the second executable pipeline stage and stores
+   ``effective_movement`` and ``effective_gait``.
+
+``tests``
+   Contains empirical validation utilities based on manually labeled
+   ground-truth windows.
+
+Notes
+-----
+
+The repository is intentionally structured so that semantic construction and
+gait detection are separated into two stages:
+
+- a first stage that builds semantic candidate windows from raw wearable data
+- a second stage that performs inertial analysis and gait validation on those
+  previously built windows

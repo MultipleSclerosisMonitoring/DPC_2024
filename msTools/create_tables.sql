@@ -63,11 +63,17 @@ CREATE INDEX IF NOT EXISTS idx_fullref_time
 
 -- Table for overlapping (simultaneous) effective-gait periods
 CREATE TABLE IF NOT EXISTS effective_gait (
-    id         SERIAL PRIMARY KEY,
-    codeid_id  INT REFERENCES codeids(id),
-    start_time TIMESTAMP WITH TIME ZONE NOT NULL,
-    end_time   TIMESTAMP WITH TIME ZONE NOT NULL,
-    duration   NUMERIC NOT NULL
+    id SERIAL PRIMARY KEY,
+    codeid_id INT REFERENCES codeids(id),
+    start_time TIMESTAMPTZ NOT NULL,
+    end_time TIMESTAMPTZ NOT NULL,
+    duration NUMERIC NOT NULL,
+    gps_points INTEGER,
+    gps_distance_m DOUBLE PRECISION,
+    gps_elapsed_sec DOUBLE PRECISION,
+    gps_avg_speed_m_s DOUBLE PRECISION,
+    gps_validated BOOLEAN
 );
+
 CREATE INDEX IF NOT EXISTS idx_effective_gait_codeid
     ON effective_gait(codeid_id);

@@ -3,22 +3,34 @@
 MS Monitoring Documentation
 ===========================
 
-Welcome to the **MS Monitoring** documentation. This guide covers installation, usage, and the architecture of each module in the `ms_monitoring` project.
+Welcome to the **MS Monitoring** documentation.
 
-Source Code
-===========
+This documentation describes the repository structure, the command-line tools,
+the shared utility layer, and the movement and gait detection pipeline used in
+the project.
 
-The source code for this project is hosted on GitHub:
-`https://github.com/MultipleSclerosisMonitoring/DPC_2024 <https://github.com/MultipleSclerosisMonitoring/DPC_2024>`_
+Project overview
+----------------
 
+The repository is organized around two main processing stages:
 
-.. automodule:: msTools.i18n
-   :members:
-   :undoc-members:
-   :show-inheritance:
+1. **Bottom-up semantic construction**
+   - retrieval of distinct CodeIDs from InfluxDB
+   - construction of `activity_leg`
+   - construction of bilateral `activity_all`
+
+2. **Movement and gait detection**
+   - retrieval of `activity_all`
+   - leg-level inertial processing
+   - detection of `effective_movement`
+   - derivation of `effective_gait`
+   - GPS-based enrichment of gait intervals
+
+High-Level Workflow
+-------------------
 
 .. graphviz::
-   :caption: High-Level Workflow Overview
+   :caption: High-level pipeline overview
    :align: center
 
    digraph overview {
@@ -28,11 +40,13 @@ The source code for this project is hosted on GitHub:
       edge  [fontname="Helvetica"];
 
       FindMSCodeIDs   [label="find_mscodeids CLI"];
-      IdentifySegs    [label="CodeIDProcessor\n.identify_activity_segments()"];
-      DetectMovement  [label="find_gait CLI\n(MovementDetector.detect_effective_movement())"];
-      DetectGait      [label="find_gait CLI\n(MovementDetector.detect_effective_gait())"];
+      ActivityLeg     [label="activity_leg"];
+      ActivityAll     [label="activity_all"];
+      FindGait        [label="find_gait CLI"];
+      EffectiveMove   [label="effective_movement"];
+      EffectiveGait   [label="effective_gait\n(+ GPS validation)"];
 
-      FindMSCodeIDs -> IdentifySegs -> DetectMovement -> DetectGait;
+      FindMSCodeIDs -> ActivityLeg -> ActivityAll -> FindGait -> EffectiveMove -> EffectiveGait;
    }
 
 Contents
@@ -40,12 +54,12 @@ Contents
 
 .. toctree::
    :maxdepth: 2
-   :caption: Sections:
+   :caption: Sections
 
    usage
    modules
 
-Indices and Tables
+Indices and tables
 ------------------
 
 * :ref:`genindex`

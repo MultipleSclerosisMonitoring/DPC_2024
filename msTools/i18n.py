@@ -36,7 +36,7 @@ import gettext as _gettext
 import locale
 import os
 from pathlib import Path
-from typing import Iterable, Optional
+from collections.abc import Callable
 
 # ---------------------------- Configuration ---------------------------------
 DOMAIN: str = "msGait"
@@ -44,16 +44,16 @@ BASE_DIR = Path(__file__).resolve().parent
 LOCALES_DIR = (BASE_DIR / ".." / "locales").resolve()
 
 # Store the active translation object. Exposed by init_translation().
-_translation: Optional[_gettext.NullTranslations] = None
+_translation: _gettext.NullTranslations | None = None
 
 # Public aliases; rebound in init_translation().
-_: callable = lambda s: s  # noqa: E731 - will be replaced by gettext after init
-ngettext: callable = lambda s, p, n: s if n == 1 else p  # noqa: E731
+_: Callable[[str], str] = lambda s: s
+ngettext: Callable[[str, str, int], str] = lambda s, p, n: s if n == 1 else p
 
 
 # ------------------------------ Public API ----------------------------------
 
-def detect_language(preferred: Optional[str] = None) -> str:
+def detect_language(preferred: str | None = None) -> str:
     """Detect a reasonable language code to use for message translation.
 
     The function tries, in order: an explicit ``preferred`` value, environment
@@ -118,7 +118,7 @@ def available_languages(localedir: str | os.PathLike = LOCALES_DIR, *, domain: s
         Sorted list of language directory names (e.g., ``["en", "es"]``).
 
     Example:
-        >>> available_languages("locales", domain="msgait")
+        >>> available_languages("locales", domain="msGait")
         ['en', 'es']
     """
     base = Path(localedir)
@@ -131,7 +131,7 @@ def available_languages(localedir: str | os.PathLike = LOCALES_DIR, *, domain: s
 
 
 def init_translation(
-    lang: Optional[str] = None,
+    lang: str | None = None,
     *,
     domain: str = DOMAIN,
     localedir: str | os.PathLike = LOCALES_DIR,
@@ -154,7 +154,7 @@ def init_translation(
         ``NullTranslations`` object is returned (strings remain unchanged).
 
     Example:
-        >>> trans = init_translation("es", domain="msgait", localedir="locales")
+        >>> trans = init_translation("es", domain="msGait", localedir="locales")
         >>> _ = _  # alias provided by this module
         >>> print(_("HELLO"))
         Hola
@@ -181,7 +181,7 @@ def init_translation(
     return trans
 
 
-def set_locale_for_formatting(lang: Optional[str]) -> None:
+def set_locale_for_formatting(lang: str | None) -> None:
     """Attempt to set the process locale for regional formatting.
 
     This affects functions that rely on the C locale (e.g., number and date

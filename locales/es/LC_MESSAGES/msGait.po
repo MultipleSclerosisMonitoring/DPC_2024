@@ -235,7 +235,7 @@ msgstr "0: no guardar, 1: guardar resultados en PostgreSQL"
 
 #: ms_monitoring/find_gait.py:139
 msgid "FGAIT_USING_LAST_HOURS"
-msgstr "Selecionada ventana de {n} horas."
+msgstr "Seleccionada ventana de {n} horas."
 
 #: ms_monitoring/find_gait.py:157
 msgid "FGAIT_1ST"

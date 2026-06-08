@@ -1,27 +1,29 @@
 from pydantic import BaseModel, Field
-from typing import Optional, List
+
 
 class CodeID(BaseModel):
-    codeid: str  # Unique CodeID string
-    id: Optional[int] = Field(default=None)  # Database ID if already stored
+    codeid: str
+    id: int | None = Field(default=None)
+
 
 class ActivityLeg(BaseModel):
-    codeid_id: int        # Foreign key to CodeID table
-    foot: str             # Leg identifier: "Left" or "Right"
-    start_time: str       # ISO 8601 start timestamp
-    end_time: str         # ISO 8601 end timestamp
-    duration: float       # Duration of the segment in seconds
-    total_value: float    # Aggregated sample count for this segment
-    mac: Optional[str] = None           # Sensor device MAC address
-    device_name: Optional[str] = None   # Sensor device name
+    codeid_id: int
+    foot: str
+    start_time: str
+    end_time: str
+    duration: float
+    total_value: float
+    mac: str | None = None
+    device_name: str | None = None
+
 
 class ActivityAll(BaseModel):
-    codeid_ids: List[int] = []       # Two CodeID IDs ([Left, Right])
-    codeleg_ids: List[int] = []      # Two activity_leg IDs ([Left, Right])
-    start_time: str                  # ISO 8601 start timestamp of the synchronized period
-    end_time: str                    # ISO 8601 end timestamp of the synchronized period
-    duration: float                  # Duration of the synchronized period in seconds
-    macs: List[str] = []             # MAC addresses ([Left, Right])
-    active_legs: List[str] = []      # Active legs in this period, e.g. ["Left", "Right"]
-    device_names: List[str] = []     # Sensor device names ([Left, Right])
-    is_effective: Optional[bool] = Field(default=False)  # Indicates if this is an effective gait period
+    codeid_ids: list[int] = Field(default_factory=list)
+    codeleg_ids: list[int] = Field(default_factory=list)
+    start_time: str
+    end_time: str
+    duration: float
+    macs: list[str] = Field(default_factory=list)
+    active_legs: list[str] = Field(default_factory=list)
+    device_names: list[str] = Field(default_factory=list)
+    is_effective: bool = Field(default=False)

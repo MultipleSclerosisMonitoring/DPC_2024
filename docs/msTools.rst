@@ -1,128 +1,231 @@
 msTools package
 ===============
 
-The **msTools** package provides shared utilities for MS Monitoring, including configuration management, database interactions, data models, internationalization, and time utilities.
+The ``msTools`` package provides the shared infrastructure used by the rest of
+the repository. It centralizes configuration loading, time normalization,
+internationalization, data validation through Pydantic models, and database
+access for both InfluxDB and PostgreSQL.
 
 Architecture Overview
 ---------------------
 
 .. graphviz::
-  :caption: DataManager Class Overview
-  :align: center
+   :caption: DataManager and shared utilities
+   :align: center
 
-  digraph class_msTools {
-    rankdir=TB;
-    graph [fontname="Helvetica"];
-    node  [shape=record, fontname="Helvetica"];
-    edge  [fontname="Helvetica"];
+   digraph class_msTools {
+      rankdir=TB;
+      graph [fontname="Helvetica"];
+      node  [shape=record, fontname="Helvetica"];
+      edge  [fontname="Helvetica"];
 
-    DataManager [
-      label="{DataManager|
-        + __init__(config_path: str)\l
-        + load_config()\l
-        + get_config(section: str)\l
-        + get_codeids_in_range(start, end)\l
-        + segments_retrieval(...)\l
-        + recover_activity_all(...)\l
-        + transform_activityleg(...)\l
-        + store_data(table, df)\l
+      DataManager [label="{DataManager|
+        + __init__(config_path)\l
+        + load_config(config_path)\l
+        + get_config(sect)\l
+        + get_influx_client()\l
+        + get_codeids_in_range(start_datetime, end_datetime)\l
+        + fetch_data(query)\l
+        + segments_retrieval(fstart, fend, ids, verbose)\l
+        + recover_activity_all(act, verbose)\l
+        + store_codeid(codeid, verbose)\l
+        + transform_activityleg(data)\l
+        + store_data(table_name, data, verbose)\l
         + get_real_codeid(codeid_id)\l
-      }"
-    ];
+        + get_codeid_id_by_value(codeid)\l
+        + get_record_all_legs(clegs, clname)\l
+        + get_activity_ids_by_start_date_range(start_datetime, end_datetime)\l
+        + close_pg()\l
+        + close_influxdb()\l
+        + close_all()\l
+      }"];
 
-    Models [
-      label="{Pydantic Models|
+      Models [label="{Pydantic models|
         CodeID\l
         ActivityLeg\l
         ActivityAll\l
-      }"
-    ];
+      }"];
 
-    TimeUtils [
-      label="{timeutils|
+      TimeUtils [label="{timeutils|
         + ensure_utc(ts)\l
-      }"
-    ];
+      }"];
 
-    I18n [
-      label="{i18n|
-        + init_translation(locale)\l
-        + _()\l
-      }"
-    ];
+      I18N [label="{i18n|
+        + detect_language(...)\l
+        + available_languages(...)\l
+        + init_translation(...)\l
+        + set_locale_for_formatting(...)\l
+        + gettext(...)\l
+      }"];
 
-    DataManager -> Models;
-    DataManager -> TimeUtils;
-    DataManager -> I18n;
-  }
+      DataManager -> Models;
+      DataManager -> TimeUtils;
+      DataManager -> I18N;
+   }
 
 Core Components
 ---------------
 
-- **DataManager** (`data_manager.py`)  
-  - `__init__(config_path: str)`  
-  - `load_config(config_path: str) -> Dict`  
-  - `get_config(sect: str) -> Dict`  
-  - `get_codeids_in_range(start_datetime: str, end_datetime: str) -> List[str]`  
-  - `segments_retrieval(fstart: Optional[str], fend: Optional[str], ids: Optional[List[int]], verbose: int) -> pd.DataFrame`  
-  - `recover_activity_all(act: pd.DataFrame, vb: int) -> pd.DataFrame`  
-  - `store_codeid(codeid: str, verbose: int) -> Tuple[int, bool]`  
-  - `transform_activityleg(data: pd.DataFrame) -> pd.DataFrame`  
-  - `store_data(table_name: str, data: pd.DataFrame, verbose: int) -> List[int]`  
-  - `get_real_codeid(codeid_id: int) -> str`  
-  - Manages InfluxDBClient and psycopg2 connections, and closing logic.
+``DataManager`` (``msTools.data_manager``)
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-- **Pydantic Models** (`models.py`)  
-  - `CodeID`  
-  - `ActivityLeg`  
-  - `ActivityAll`  
+``DataManager`` is the main integration layer of the project.
 
-- **Time Utilities** (`timeutils.py`)  
-  - `ensure_utc(ts) -> pd.Timestamp`
+Its responsibilities include:
 
-- **Internationalization** (`i18n.py`)  
-  - `init_translation(idioma: str)`  
-  - `_()` helper for translations  
+- loading project configuration from ``config.yaml``
+- opening and closing PostgreSQL and InfluxDB connections
+- retrieving CodeIDs from InfluxDB
+- retrieving bilateral ``activity_all`` windows from PostgreSQL
+- expanding bilateral windows into one row per leg
+- validating rows with Pydantic before insertion
+- storing semantic tables with idempotent behaviour for the main outputs
+- updating GPS-related fields in ``effective_gait`` when required
 
-Submodules
-----------
+Important public methods include:
 
-msTools.data_manager module
----------------------------
+- ``__init__(config_path: str) -> None``
+- ``load_config(config_path: str) -> dict[str, Any]``
+- ``get_config(sect: str) -> dict[str, Any] | None``
+- ``get_influx_client() -> InfluxDBClient``
+- ``get_codeids_in_range(start_datetime: str, end_datetime: str) -> list[str]``
+- ``fetch_data(query: str) -> pandas.DataFrame``
+- ``segments_retrieval(fstart: str | None = None, fend: str | None = None, ids: list[int] | None = None, verbose: int = 0) -> pandas.DataFrame``
+- ``recover_activity_all(act: pandas.DataFrame, verbose: int = 0) -> pandas.DataFrame``
+- ``store_codeid(codeid: str, verbose: int = 0) -> tuple[int, bool]``
+- ``transform_activityleg(data: pandas.DataFrame) -> pandas.DataFrame``
+- ``store_data(table_name: str, data: pandas.DataFrame, verbose: int = 1) -> list[int]``
+- ``get_real_codeid(codeid_id: int) -> str``
+- ``get_codeid_id_by_value(codeid: str) -> int | None``
+- ``get_record_all_legs(clegs: set, clname: str = "codeleg_ids") -> pandas.DataFrame``
+- ``get_activity_ids_by_start_date_range(start_datetime: str | datetime, end_datetime: str | datetime) -> list[int]``
+- ``close_pg() -> None``
+- ``close_influxdb() -> None``
+- ``close_all() -> None``
+
+``models`` (``msTools.models``)
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+The shared Pydantic models used before PostgreSQL insertion are:
+
+- ``CodeID``
+- ``ActivityLeg``
+- ``ActivityAll``
+
+These models help validate semantic records before they are persisted.
+
+``timeutils`` (``msTools.timeutils``)
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+This module provides:
+
+- ``ensure_utc(ts: str | pandas.Timestamp | datetime) -> pandas.Timestamp``
+
+It is used to normalize timestamps consistently before querying InfluxDB or
+PostgreSQL. Naive timestamps are interpreted as Europe/Madrid local time and
+then converted to UTC.
+
+``i18n`` (``msTools.i18n``)
+~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+This module provides lightweight internationalization helpers based on
+``gettext``:
+
+- ``detect_language(...)``
+- ``available_languages(...)``
+- ``init_translation(...)``
+- ``set_locale_for_formatting(...)``
+- ``gettext(...)``
+
+It allows the CLI tools and other modules to expose translated messages while
+keeping a single shared implementation.
+
+How ``msTools`` fits into the pipeline
+--------------------------------------
+
+The package supports both main repository stages.
+
+1. **Bottom-up semantic construction**
+
+   - raw wearable data is queried from InfluxDB
+   - ``activity_leg`` is built per foot
+   - bilateral overlaps are merged into ``activity_all``
+
+2. **Movement and gait detection**
+
+   - ``activity_all`` windows are read from PostgreSQL
+   - bilateral windows are expanded into per-leg rows
+   - downstream modules derive ``effective_movement``
+   - bilateral gait events are stored in ``effective_gait``
+   - ``effective_gait`` rows may be enriched with GPS metrics such as
+     travelled distance, elapsed time, average speed, and validation flag
+
+Configuration
+-------------
+
+The package reads configuration from the project-level ``config.yaml``.
+
+Example:
+
+.. code-block:: yaml
+
+   influxdb:
+     url: "https://<HOST>:8086"
+     token: "<YOUR_TOKEN>"
+     org: "<ORG>"
+     bucket: "<BUCKET>"
+     measurement: "<MEASUREMENT>"
+     verify: false
+     timeout: 900000
+
+   postgresql:
+     host: "<PG_HOST>"
+     port: 5432
+     user: "<USER>"
+     password: "<PASSWORD>"
+     database: "<DB_NAME>"
+
+Notes
+-----
+
+- Semantic timestamps are handled with timezone awareness.
+- Database inserts are validated with Pydantic models.
+- The storage logic is idempotent for the main semantic tables.
+- ``effective_gait`` can include GPS enrichment fields:
+  ``gps_points``, ``gps_distance_m``, ``gps_elapsed_sec``,
+  ``gps_avg_speed_m_s``, and ``gps_validated``.
+
+API Reference
+-------------
+
+Data manager
+~~~~~~~~~~~~
 
 .. automodule:: msTools.data_manager
-  :members:
-  :undoc-members:
-  :show-inheritance:
+   :members:
+   :undoc-members:
+   :show-inheritance:
 
-msTools.models module
----------------------
+Models
+~~~~~~
 
 .. automodule:: msTools.models
-  :members:
-  :undoc-members:
-  :show-inheritance:
+   :members:
+   :undoc-members:
+   :show-inheritance:
 
-msTools.timeutils module
-------------------------
+Time utilities
+~~~~~~~~~~~~~~
 
 .. automodule:: msTools.timeutils
-  :members:
-  :undoc-members:
-  :show-inheritance:
+   :members:
+   :undoc-members:
+   :show-inheritance:
 
-msTools.i18n module
--------------------
+Internationalization
+~~~~~~~~~~~~~~~~~~~~
 
 .. automodule:: msTools.i18n
-  :members:
-  :undoc-members:
-  :show-inheritance:
-
-Package Contents
-----------------
-
-.. automodule:: msTools
-  :members:
-  :undoc-members:
-  :show-inheritance:
+   :members:
+   :undoc-members:
+   :show-inheritance:

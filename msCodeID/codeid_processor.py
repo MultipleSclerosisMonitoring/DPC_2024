@@ -1,26 +1,23 @@
 import pandas as pd
 from datetime import datetime
-from pydantic import ValidationError
 from msTools.data_manager import DataManager
 from msTools import i18n
-from msTools.models import ActivityLeg, ActivityAll
-from msGait.models import ActivitySegment
 from msTools.timeutils import ensure_utc
 
 class CodeIDProcessor:
-    """
-    Processes CodeIDs: fetches raw data from InfluxDB,
-    identifies activity segments, and prepares them for PostgreSQL.
-    """
-    def __init__(self, data_manager: DataManager):
-        """
-        Initialize the CodeID processor.
+    """Process CodeIDs from raw InfluxDB data into semantic activity frames."""
 
-        :param data_manager: DataManager instance for DB interactions.
+    def __init__(self, data_manager: DataManager, verbose: int = 0) -> None:
+        """Initialize the CodeID processor.
+
+        Args:
+            data_manager: DataManager instance used for database interactions.
+            verbose: Verbosity level for console output.
         """
         self.data_manager = data_manager
         self.influx_client = data_manager.get_influx_client()
         self.bucket = data_manager.bucket
+        self.verbose = verbose
 
     def fetch_codeid_data(
         self,
@@ -28,13 +25,15 @@ class CodeIDProcessor:
         start_datetime: datetime,
         end_datetime: datetime
     ) -> pd.DataFrame:
-        """
-        Fetch sensor-count data for a given CodeID from InfluxDB.
+        """Fetch aggregated sensor-count data for a given CodeID from InfluxDB.
 
-        :param codeid: Unique CodeID string.
-        :param start_datetime: Start of time range.
-        :param end_datetime: End of time range.
-        :return: DataFrame of InfluxDB query results.
+        Args:
+            codeid: Unique CodeID string.
+            start_datetime: Start of the time range.
+            end_datetime: End of the time range.
+
+        Returns:
+            DataFrame containing the InfluxDB query results.
         """
         # Normalize to UTC format
         start_str = ensure_utc(start_datetime).isoformat().replace("+00:00", "Z")
@@ -53,13 +52,20 @@ class CodeIDProcessor:
                 org=self.data_manager.config['influxdb']['org'], query=query
             )
             data = [record.values for table in result for record in table.records]
-            df = pd.DataFrame(data).sort_values('_time')
-            if df.empty:
-                print(i18n._("NO_DATA_CODEID").format(codeid=codeid))
-            else:
+            df = pd.DataFrame(data)
+
+            if df.empty or "_time" not in df.columns:
+                if self.verbose >= 1:
+                    print(i18n._("NO_DATA_CODEID").format(codeid=codeid))
+                return pd.DataFrame()
+
+            df = df.sort_values("_time")
+
+            if self.verbose >= 2:
                 print(i18n._("DATA_RETRIEVED_CODEID").format(
                     codeid=codeid, rows=len(df)
                 ))
+
             return df
 
         except Exception as e:
@@ -73,23 +79,29 @@ class CodeIDProcessor:
         self,
         df: pd.DataFrame,
         threshold_seconds: float = 70,
-        foot: str = 'Left'
+        foot: str = "Left"
     ) -> pd.DataFrame:
-        """
-        Identify contiguous windows of activity based on time gaps.
+        """Identify contiguous activity windows based on time gaps.
 
-        :param df: Raw count DataFrame with a '_time' column.
-        :param threshold_seconds: Max gap in seconds to group points together.
-        :param foot: 'Left' or 'Right' leg filter.
-        :return: DataFrame with columns ['time_from','time_until','CodeID','DeviceName','Foot','total_value','mac'].
+        Args:
+            df: Raw count DataFrame containing a `_time` column.
+            threshold_seconds: Maximum gap in seconds allowed inside one segment.
+            foot: Foot to filter (`"Left"` or `"Right"`).
+
+        Returns:
+            DataFrame with columns
+            [`time_from`, `time_until`, `CodeID`, `DeviceName`, `Foot`,
+            `total_value`, `mac`].
         """
         def grouping(block: pd.DataFrame, thresh: float) -> pd.DataFrame:
-            """
-            Group rows into segments where time gaps or device changes occur.
+            """Group rows into segments based on time gaps and device changes.
 
-            :param block: Filtered DataFrame for one leg.
-            :param thresh: Threshold in seconds for a new group.
-            :return: Aggregated segments with start/end times.
+            Args:
+                block: Filtered DataFrame for one foot.
+                thresh: Threshold in seconds to start a new segment.
+
+            Returns:
+                Aggregated segment DataFrame with start and end times.
             """
             block = block.assign(
                 _time_diff=block['_time'].diff().dt.total_seconds()
@@ -110,39 +122,156 @@ class CodeIDProcessor:
             return result
 
         if df.empty:
-            print(i18n._("MSG_NO_DATA_DF"))
+            if self.verbose >= 1:
+                print(i18n._("MSG_NO_DATA_DF"))
             # Return empty with expected columns
             return pd.DataFrame(columns=[
                 'time_from','time_until','CodeID','DeviceName','Foot','total_value','mac'
             ])
 
         # Ensure '_time' is datetime with timezone
-        if not pd.api.types.is_datetime64_any_dtype(df["_time"]):
-            df["_time"] = pd.to_datetime(df["_time"])
-            if df["_time"].dt.tz is None:
-                df["_time"] = df["_time"].dt.tz_localize("Europe/Madrid")
+        df = df.copy()
+        df["_time"] = pd.to_datetime(df["_time"], errors="coerce")
+        df = df.dropna(subset=["_time"])
+
+        if df.empty:
+            if self.verbose >= 1:
+                print(i18n._("MSG_NO_DATA_DF"))
+            return pd.DataFrame(columns=[
+                'time_from', 'time_until', 'CodeID', 'DeviceName', 'Foot', 'total_value', 'mac'
+            ])
+
+        if df["_time"].dt.tz is None:
+            df["_time"] = df["_time"].dt.tz_localize("Europe/Madrid")
 
         # Drop unwanted columns, sort by time
-        clean = df.drop(columns=['result','table','_field','lng','lat']) \
-                  .sort_values("_time")
+        clean = df.drop(columns=['result', 'table', '_field', 'lng', 'lat'], errors='ignore') \
+                .sort_values("_time")
         filtered = clean[clean['Foot'] == foot]
         grouped  = grouping(filtered, threshold_seconds)
 
         return grouped if not grouped.empty else pd.DataFrame(columns=[
             'time_from','time_until','CodeID','DeviceName','Foot','total_value','mac'
         ])
+    
+    def build_activity_leg_frames(
+        self,
+        sensor_data: pd.DataFrame,
+        codeid_id: int,
+        gap_threshold_seconds: float = 80.0,
+    ) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame, pd.DataFrame]:
+        """Build left/right activity_leg frames bottom-up from raw sensor counts.
+
+        Args:
+            sensor_data (pd.DataFrame): Raw aggregated sensor data for one CodeID.
+            codeid_id (int): Internal PostgreSQL id for the CodeID.
+            gap_threshold_seconds (float): Maximum temporal gap to keep samples
+                inside the same activity segment.
+
+        Returns:
+            tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame, pd.DataFrame]:
+                - activity_seg_left: raw left-leg segments
+                - activity_seg_right: raw right-leg segments
+                - activity_seg_left_merge: left-leg segments prepared for downstream merge
+                - activity_seg_right_merge: right-leg segments prepared for downstream merge
+        """
+        leg_merge_columns = [
+            "time_from",
+            "time_until",
+            "CodeID",
+            "device_name",
+            "foot",
+            "total_value",
+            "mac",
+            "codeid_id",
+            "codeleg_id",
+        ]
+
+        activity_seg_left = self.identify_activity_segments(
+            sensor_data,
+            gap_threshold_seconds,
+            "Left",
+        )
+        activity_seg_right = self.identify_activity_segments(
+            sensor_data,
+            gap_threshold_seconds,
+            "Right",
+        )
+
+        if not activity_seg_left.empty:
+            activity_seg_left = activity_seg_left.loc[
+                (activity_seg_left["time_until"] - activity_seg_left["time_from"])
+                .dt.total_seconds() > 0
+            ].copy()
+
+        if not activity_seg_right.empty:
+            activity_seg_right = activity_seg_right.loc[
+                (activity_seg_right["time_until"] - activity_seg_right["time_from"])
+                .dt.total_seconds() > 0
+            ].copy()
+
+        activity_seg_left_merge = pd.DataFrame(columns=leg_merge_columns)
+        activity_seg_right_merge = pd.DataFrame(columns=leg_merge_columns)
+
+        if not activity_seg_left.empty:
+            activity_seg_left_merge = activity_seg_left.rename(
+                columns={"DeviceName": "device_name", "Foot": "foot"}
+            ).copy()
+            activity_seg_left_merge["codeid_id"] = codeid_id
+
+        if not activity_seg_right.empty:
+            activity_seg_right_merge = activity_seg_right.rename(
+                columns={"DeviceName": "device_name", "Foot": "foot"}
+            ).copy()
+            activity_seg_right_merge["codeid_id"] = codeid_id
+
+        return (
+            activity_seg_left,
+            activity_seg_right,
+            activity_seg_left_merge,
+            activity_seg_right_merge,
+        )
+
+    def build_activity_all_frame(
+        self,
+        activity_seg_right_merge: pd.DataFrame,
+        activity_seg_left_merge: pd.DataFrame,
+    ) -> pd.DataFrame:
+        """Build activity_all bottom-up from right/left activity_leg frames.
+
+        Args:
+            activity_seg_right_merge (pd.DataFrame): Right-leg activity_leg-like frame.
+            activity_seg_left_merge (pd.DataFrame): Left-leg activity_leg-like frame.
+
+        Returns:
+            pd.DataFrame: activity_all-like DataFrame ready to be stored.
+        """
+        if activity_seg_right_merge.empty or activity_seg_left_merge.empty:
+            return pd.DataFrame()
+
+        intersections = self.inter_segs(activity_seg_right_merge, activity_seg_left_merge)
+        if intersections.empty:
+            return pd.DataFrame()
+
+        return self.merge_activity_legs_to_all(
+            activity_seg_right_merge,
+            activity_seg_left_merge,
+            intersections,
+        )
 
     def inter_segs(
         self,
         sg1: pd.DataFrame,
         sg2: pd.DataFrame
     ) -> pd.DataFrame:
-        """
-        Compute intersections between two sets of time segments.
+        """Compute temporal intersections between two sets of segments.
 
-        :param sg1: DataFrame of segments for leg 1.
-        :param sg2: DataFrame of segments for leg 2.
-        :return: DataFrame of overlapping intervals with index refs.
+        Args:
+            sg1: DataFrame of segments for leg 1.
+            sg2: DataFrame of segments for leg 2.
+
+        Returns:
+            DataFrame of overlapping intervals with index references.
         """
         def overlaps(r):
             return (r['time_from_1'] <= r['time_until_2'] and
@@ -178,9 +307,15 @@ class CodeIDProcessor:
         act_segL: pd.DataFrame,
         inter: pd.DataFrame
     ) -> pd.DataFrame:
-        """
-        Merge left and right leg segments into a single DataFrame
-        ready for insertion into the 'activity_all' table.
+        """Merge left and right leg activity segments into an activity_all frame.
+
+        Args:
+            act_segR: Right-leg segment DataFrame.
+            act_segL: Left-leg segment DataFrame.
+            inter: DataFrame of bilateral temporal intersections.
+
+        Returns:
+            DataFrame ready to be inserted into the `activity_all` table.
         """
         def format_mac(addr: str) -> str:
             """Convert hyphenated MAC suffix into colon-separated hex."""
@@ -229,11 +364,11 @@ class CodeIDProcessor:
         return df
 
     def save_to_postgresql(self, table_name: str, df: pd.DataFrame) -> None:
-        """
-        Save processed DataFrame to a PostgreSQL table using DataManager.
+        """Save a processed DataFrame to PostgreSQL using DataManager.
 
-        :param table_name: Destination table name.
-        :param df: DataFrame to insert.
+        Args:
+            table_name: Destination table name.
+            df: DataFrame to insert.
         """
         if df.empty:
             print(i18n._("MSG_NO_DATA_SAVE").format(table=table_name))
