@@ -1,7 +1,7 @@
 Usage
 =====
 
-This section describes the practical execution flow of the repository.
+This section describes the practical execution flow of the repository. It assumes a hybrid configuration model where ``config.yaml`` holds structural settings and an optional ``.env`` file overrides local secrets.
 
 The project is intended to be run in two consecutive stages:
 

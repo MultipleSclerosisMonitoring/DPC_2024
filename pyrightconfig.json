@@ -1,0 +1,28 @@
+{
+  "typeCheckingMode": "basic",
+  "pythonVersion": "3.11",
+  "include": [
+    "api.py",
+    "msTools",
+    "msGait",
+    "msCodeID",
+    "ms_monitoring",
+    "tests"
+  ],
+  "exclude": [
+    "docs/_build",
+    "**/__pycache__",
+    "tests/build_ground_truth_template.py",
+    "tests/export_ground_truth_windows.py",
+    "tests/validate_ground_truth.py"
+  ],
+  "reportMissingTypeStubs": false,
+  "reportUnknownMemberType": false,
+  "reportUnknownVariableType": false,
+  "reportUnknownArgumentType": false,
+  "reportUnknownLambdaType": false,
+  "reportUnknownParameterType": false,
+  "reportMissingParameterType": false,
+  "reportPrivateUsage": false,
+  "reportPrivateImportUsage": false
+}

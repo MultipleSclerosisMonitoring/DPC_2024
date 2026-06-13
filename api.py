@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
-from typing import Any, Literal
+from typing import Any, Literal, cast
 
 from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.responses import RedirectResponse
@@ -9,6 +9,7 @@ from pydantic import BaseModel, Field
 
 from msGait.movement_detector import MovementDetector
 from msTools.data_manager import DataManager
+from msTools.settings import get_runtime_config_path
 
 app = FastAPI(
     title="MS Monitoring API",
@@ -35,14 +36,15 @@ def _startup() -> None:
     """Create shared instances when starting the server."""
     global _dm, _detector
 
-    _dm = DataManager(config_path="config.yaml")
+    config_path = get_runtime_config_path()
+    _dm = DataManager(config_path=config_path)
 
     now = datetime.now(timezone.utc)
     fstart = (now - timedelta(minutes=1)).strftime("%Y-%m-%dT%H:%M:%SZ")
     fend = now.strftime("%Y-%m-%dT%H:%M:%SZ")
 
     _detector = MovementDetector(
-        config_file="config.yaml",
+        config_file=config_path,
         sect="movement",
         fstart=fstart,
         fend=fend,
@@ -66,6 +68,11 @@ class GaitResponse(BaseModel):
     effective_gait_rows: int
     preview_effective_movement: list[dict[str, Any]] = Field(default_factory=list)
     preview_effective_gait: list[dict[str, Any]] = Field(default_factory=list)
+
+
+def _records_to_json(df) -> list[dict[str, Any]]:
+    """Convert a DataFrame into JSON-serializable records with string keys."""
+    return [cast(dict[str, Any], {str(key): value for key, value in row.items()}) for row in df.to_dict(orient="records")]
 
 
 # ---- ENDPOINTS ----
@@ -124,7 +131,7 @@ def activity_windows(
             ids=ids,
             verbose=verbose,
         )
-        return df.to_dict(orient="records")
+        return _records_to_json(df)
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error retrieving activity windows: {e}")
 
@@ -145,7 +152,7 @@ def sensor_data(
 
     try:
         df = _detector.fetch_sensor_data(start, end, codeid_id, foot)
-        return df.to_dict(orient="records")
+        return _records_to_json(df)
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error retrieving sensor data: {e}")
 
@@ -194,8 +201,8 @@ def detect_gait(req: GaitRequest) -> GaitResponse:
         return GaitResponse(
             effective_movement_rows=len(df_eff),
             effective_gait_rows=len(df_gait),
-            preview_effective_movement=df_eff.head(req.head_rows).to_dict(orient="records"),
-            preview_effective_gait=df_gait.head(req.head_rows).to_dict(orient="records"),
+            preview_effective_movement=_records_to_json(df_eff.head(req.head_rows)),
+            preview_effective_gait=_records_to_json(df_gait.head(req.head_rows)),
         )
 
     except ValueError as e:

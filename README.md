@@ -63,7 +63,7 @@ gait episodes with GPS-based metrics.
 - Python 3.11
 - PostgreSQL
 - InfluxDB
-- the repository includes a template `config.yaml` file that must be edited locally with your real connection values
+- the repository ships with a `config.yaml` template and an optional `.env.example` for local secret overrides
 
 ## Installation
 
@@ -87,7 +87,13 @@ pip install -r requirements.txt
 
 ## Configuration
 
-The repository includes a template `config.yaml` in the project root.
+The repository uses a hybrid configuration model:
+
+- `config.yaml` stores the structural project configuration and algorithm parameters
+- `.env` can override local secrets and connection values
+- `.env.example` documents the supported environment variables
+
+If you do not need environment overrides, `config.yaml` alone is still valid.
 
 Replace the `XXX` placeholders with your real local connection values:
 
@@ -129,6 +135,18 @@ movement:
   gps_min_speed_m_s:          0.2
   gps_max_speed_m_s:          3.0
 ```
+
+## Optional `.env` overrides
+
+```dotenv
+MS_MONITORING_CONFIG=config.yaml
+INFLUXDB_URL=https://your-influx-host:8086
+INFLUXDB_TOKEN=replace-me
+POSTGRESQL_HOST=localhost
+POSTGRESQL_PASSWORD=replace-me
+```
+
+Environment variables take precedence over `.env`, and `.env` takes precedence over `config.yaml`.
 
 ## Notes on the `movement` section
 

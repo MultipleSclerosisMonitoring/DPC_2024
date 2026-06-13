@@ -20,6 +20,7 @@ The package centers on `DataManager`, which is responsible for:
 
 It also includes:
 
+- `settings.py` for typed configuration loading and `.env` overrides
 - `models.py` for shared Pydantic models
 - `timeutils.py` for UTC normalization
 - `i18n.py` for gettext-based translations
@@ -97,7 +98,7 @@ Provides lightweight internationalization helpers:
 
 ## Configuration
 
-The package reads configuration from the project-level `config.yaml`.
+The package reads configuration from `config.yaml`, with optional overrides from a local `.env` file. The repository includes `.env.example` as a documented template.
 
 Example:
 

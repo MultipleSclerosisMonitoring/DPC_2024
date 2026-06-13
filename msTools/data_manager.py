@@ -1,19 +1,29 @@
 import pandas as pd
 from influxdb_client import InfluxDBClient
 import psycopg2
-import yaml
+from collections.abc import Sequence
+
 from msTools.models import CodeID, ActivityLeg, ActivityAll
 from msTools import i18n
 from msTools.timeutils import ensure_utc
 from msGait.models import EffectiveMovement, EffectiveGait, ActivitySegment
 from pydantic import ValidationError
-from typing import Any
+from typing import Any, cast
 from psycopg2 import sql
 import datetime
 from pandas.api.types import DatetimeTZDtype
 
+from msTools.settings import AppConfig, get_runtime_config_path, load_app_config
+
+
 
 class DataManager:
+    def _require_pg_conn(self) -> psycopg2.extensions.connection:
+        if self.pg_conn is None:
+            raise RuntimeError("PostgreSQL connection is not initialized.")
+        return self.pg_conn
+
+
     def __init__(self, config_path: str) -> None:
         """Initialize the DataManager and open database connections.
 
@@ -21,13 +31,15 @@ class DataManager:
             config_path: Path to the YAML configuration file.
         """
         # Initialize attributes early so __del__ never fails even if init raises.
+        self.settings: AppConfig | None = None
         self.config: dict[str, Any] = {}
         self.pg_conn: psycopg2.extensions.connection | None = None
         self.influxdb_client: InfluxDBClient | None = None
         self.bucket: str = ""
         self.measurement: str = ""
 
-        self.config = self.load_config(config_path)
+        self.settings = load_app_config(get_runtime_config_path(config_path))
+        self.config = self.settings.model_dump(mode="python")
 
         # Configure PostgreSQL connection
         self.pg_conn = self._connect_postgresql()
@@ -55,16 +67,16 @@ class DataManager:
             pass
 
     def load_config(self, config_path: str) -> dict[str, Any]:
-        """Load configuration values from a YAML file.
+        """Load and validate configuration values.
 
         Args:
             config_path: Path to the YAML configuration file.
 
         Returns:
-            Parsed configuration dictionary.
+            Parsed configuration dictionary after environment overrides.
         """
-        with open(config_path, "r", encoding="utf-8") as file:
-            return yaml.safe_load(file)
+        settings = load_app_config(get_runtime_config_path(config_path))
+        return settings.model_dump(mode="python")
         
     def get_config(self, sect: str) -> dict[str, Any] | None:
         """Return one configuration section from the loaded config.
@@ -121,7 +133,12 @@ class DataManager:
 
         Returns:
             InfluxDB client used by the repository.
+
+        Raises:
+            RuntimeError: If the client is not initialized.
         """
+        if self.influxdb_client is None:
+            raise RuntimeError("InfluxDB client is not initialized.")
         return self.influxdb_client
 
     def check_and_create_tables(self, sql_file_path: str) -> None:
@@ -140,7 +157,8 @@ class DataManager:
                 "effective_gait",
             ]
 
-            with self.pg_conn.cursor() as cursor:
+            pg_conn = self._require_pg_conn()
+            with pg_conn.cursor() as cursor:
                 for table_name in required_tables:
                     cursor.execute(f"""
                         SELECT EXISTS (
@@ -148,17 +166,20 @@ class DataManager:
                             WHERE table_name = '{table_name}'
                         );
                     """)
-                    exists = cursor.fetchone()[0]
+                    fetchone_result = cursor.fetchone()
+                    if fetchone_result is None:
+                        raise RuntimeError(f"Table existence query did not return a row for {table_name}.")
+                    exists = fetchone_result[0]
                     if not exists:
                         print(i18n._("INFO_CREATE_TABLE").format(table=table_name, file=sql_file_path))
                         with open(sql_file_path, "r", encoding="utf-8") as sql_file:
                             sql_script = sql_file.read()
                             cursor.execute(sql_script)
-                            self.pg_conn.commit()
+                            pg_conn.commit()
                     else:
                         print(i18n._("INFO_TABLE_EXISTS").format(table=table_name))
         except Exception as e:
-            self.pg_conn.rollback()
+            pg_conn.rollback()
             print(i18n._("PGSQL-TAB-ERR").format(e=e))
             raise
 
@@ -188,16 +209,17 @@ class DataManager:
                 |> distinct(column: "CodeID")
             '''
 
-            result = self.influxdb_client.query_api().query(
+            influx_client = self.get_influx_client()
+            result = influx_client.query_api().query(
                 query, org=self.config['influxdb']['org']
             )
 
-            codeids = sorted({
-                record.values.get("CodeID")
+            codeids = sorted(
+                str(record.values["CodeID"])
                 for table in result
                 for record in table.records
                 if record.values.get("CodeID") not in (None, "")
-            })
+            )
 
             return codeids
 
@@ -206,20 +228,31 @@ class DataManager:
             return []
         
 
-    def fetch_data(self, query: str) -> pd.DataFrame:
+    def fetch_data(
+        self,
+        query: str,
+        params: Sequence[Any] | None = None,
+    ) -> pd.DataFrame:
         """Execute a SQL query in PostgreSQL and return the result as a DataFrame.
 
         Args:
             query: SQL query string.
+            params: Optional SQL parameters passed to ``cursor.execute``.
 
         Returns:
             DataFrame containing the query results.
         """
         try:
-            with self.pg_conn.cursor() as cursor:
-                cursor.execute(query)
-                columns = [desc[0] for desc in cursor.description] 
-                data = cursor.fetchall() 
+            pg_conn = self._require_pg_conn()
+            with pg_conn.cursor() as cursor:
+                if params is None:
+                    cursor.execute(query)
+                else:
+                    cursor.execute(query, params)
+                if cursor.description is None:
+                    raise RuntimeError("Query did not return a description.")
+                columns = [desc[0] for desc in cursor.description]
+                data = cursor.fetchall()
                 return pd.DataFrame(data, columns=columns)
         except Exception as e:
             print(i18n._("PGSQL-QRY-GEN-ERR").format(e=e))
@@ -294,8 +327,11 @@ class DataManager:
             params = (end_utc, start_utc)
 
         try:
-            with self.pg_conn.cursor() as cursor:
+            pg_conn = self._require_pg_conn()
+            with pg_conn.cursor() as cursor:
                 cursor.execute(query, params)
+                if cursor.description is None:
+                    raise RuntimeError("Query did not return a description.")
                 columns = [desc[0] for desc in cursor.description]
                 data = cursor.fetchall()
                 df = pd.DataFrame(data, columns=columns)
@@ -339,7 +375,8 @@ class DataManager:
 
         codeid_map = {}
         if unique_codeid_ids:
-            with self.pg_conn.cursor() as cursor:
+            pg_conn = self._require_pg_conn()
+            with pg_conn.cursor() as cursor:
                 cursor.execute(
                     "SELECT id, codeid FROM codeids WHERE id = ANY(%s);",
                     (unique_codeid_ids,)
@@ -394,7 +431,8 @@ class DataManager:
         try:
             validated_codeid = CodeID(codeid=codeid)
 
-            with self.pg_conn.cursor() as cursor:
+            pg_conn = self._require_pg_conn()
+            with pg_conn.cursor() as cursor:
                 cursor.execute(
                     "INSERT INTO codeids (codeid) VALUES (%s) ON CONFLICT (codeid) DO NOTHING RETURNING id;",
                     (validated_codeid.codeid,)
@@ -402,13 +440,16 @@ class DataManager:
                 result = cursor.fetchone()
                 if result:
                     new_id = result[0]
-                    self.pg_conn.commit()
+                    pg_conn.commit()
                     if verbose >= 2:
                         print(i18n._("INFO_CODEID_NEW").format(codeid=codeid, id=new_id))
                     return new_id, True
                 
                 cursor.execute("SELECT id FROM codeids WHERE codeid = %s;", (validated_codeid.codeid,))
-                existing_id = cursor.fetchone()[0]
+                existing_row = cursor.fetchone()
+                if existing_row is None:
+                    raise RuntimeError(f"CodeID {validated_codeid.codeid} was not found after insert attempt.")
+                existing_id = existing_row[0]
                 if verbose >= 2:
                     print(i18n._("INFO_CODEID_EXIST").format(codeid=codeid, id=existing_id))
                 return existing_id, False
@@ -416,7 +457,7 @@ class DataManager:
             print(i18n._("PGSQL-VAL-COD-ERR").format(e=e))
             raise
         except Exception as e:
-            self.pg_conn.rollback()
+            pg_conn.rollback()
             print(i18n._("PGSQL-INS-COD-ERR").format(e=e))
             raise
 
@@ -438,9 +479,13 @@ class DataManager:
             Returns:
                 Integer identifier from the `codeids` table.
             """    
-            with self.pg_conn.cursor() as cursor:
+            pg_conn = self._require_pg_conn()
+            with pg_conn.cursor() as cursor:
                 cursor.execute("SELECT id FROM codeids WHERE codeid = %s;", (codeid,))
-                return cursor.fetchone()[0] 
+                fetchone_result = cursor.fetchone()
+                if fetchone_result is None:
+                    raise RuntimeError(f"CodeID {codeid} was not found in PostgreSQL.")
+                return fetchone_result[0] 
         
         work = data.copy()
         work['start_time'] = work['time_from'].apply(lambda x: x.isoformat())
@@ -677,7 +722,8 @@ class DataManager:
 
             inserted_ids: list[int] = []
 
-            with self.pg_conn.cursor() as cursor:
+            pg_conn = self._require_pg_conn()
+            with pg_conn.cursor() as cursor:
                 for row in validated_rows:
                     if table_name in {"activity_leg", "activity_all", "effective_movement", "effective_gait"}:
                         row_id = self._upsert_like_row_returning_id(cursor, table_name, row)
@@ -686,7 +732,7 @@ class DataManager:
 
                     inserted_ids.append(row_id)
 
-                self.pg_conn.commit()
+                pg_conn.commit()
 
             if verbose > 0:
                 print(i18n._("PGSQL-INS-TAB-OK").format(table_name=table_name))
@@ -699,7 +745,7 @@ class DataManager:
             print(i18n._("PGSQL-VAL-TAB-ERR").format(e=e))
             return []
         except Exception as e:
-            self.pg_conn.rollback()
+            pg_conn.rollback()
             print(i18n._("PGSQL-INS-TAB-ERR").format(e=e))
             return []
 
@@ -718,7 +764,8 @@ class DataManager:
         """
         try:
             query = "SELECT codeid FROM codeids WHERE id = %s;"
-            with self.pg_conn.cursor() as cursor:
+            pg_conn = self._require_pg_conn()
+            with pg_conn.cursor() as cursor:
                 cursor.execute(query, (codeid_id,))
                 result = cursor.fetchone()
                 if result:
@@ -739,7 +786,8 @@ class DataManager:
             Integer ID if found, otherwise ``None``.
         """
         try:
-            with self.pg_conn.cursor() as cursor:
+            pg_conn = self._require_pg_conn()
+            with pg_conn.cursor() as cursor:
                 cursor.execute(
                     "SELECT id FROM codeids WHERE codeid = %s;",
                     (codeid,)
@@ -772,10 +820,13 @@ class DataManager:
             in_clause = sql.SQL(', ').join(array_literals)
             query = sql.SQL("SELECT * FROM activity_all WHERE {} IN ({})").format(
                 sql.Identifier(clname),in_clause)
-            with self.pg_conn.cursor() as cursor:
+            pg_conn = self._require_pg_conn()
+            with pg_conn.cursor() as cursor:
                 cursor.execute(query)
                 result = cursor.fetchall()
                 if result:
+                    if cursor.description is None:
+                        raise RuntimeError("Query did not return a description.")
                     columns = [desc[0] for desc in cursor.description]
                     df = pd.DataFrame(result, columns=columns)
                     # Due to the lack of TZ info we must change 
@@ -807,7 +858,8 @@ class DataManager:
             sdt = ensure_utc(start_datetime)  # → aware UTC datetime
             edt = ensure_utc(end_datetime)
 
-            with self.pg_conn.cursor() as cur:
+            pg_conn = self._require_pg_conn()
+            with pg_conn.cursor() as cur:
                 cur.execute(
                     """
                     SELECT DISTINCT id

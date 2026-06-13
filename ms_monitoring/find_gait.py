@@ -12,8 +12,10 @@ class VAction(argparse.Action):
     def __call__(self, parser, namespace, values, option_string=None):
         if values is None:
             setattr(namespace, self.dest, getattr(namespace, self.dest) + 1)
-        else:
+        elif isinstance(values, str):
             setattr(namespace, self.dest, int(values))
+        else:
+            raise ValueError("Verbosity expects an optional integer value.")
 
 def parse_range_list(rango_str: str) -> list[int]:
     """Convert a string like '1-271' or '1,5,10-15' into a list of integers.

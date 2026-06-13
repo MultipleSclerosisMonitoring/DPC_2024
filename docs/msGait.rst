@@ -101,7 +101,7 @@ This second stage consumes ``activity_all`` and produces:
 Configuration
 -------------
 
-``msGait`` reads its parameters from the ``movement`` section of ``config.yaml``.
+``msGait`` reads its parameters from the ``movement`` section of ``config.yaml``. Connection values can be overridden through ``.env`` using the keys documented in ``.env.example``.
 
 Example:
 

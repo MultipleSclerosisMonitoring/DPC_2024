@@ -1,5 +1,6 @@
 import pandas as pd
 import numpy as np
+from datetime import datetime
 
 from pandas import ExcelWriter
 from pandas.api.types import DatetimeTZDtype
@@ -11,6 +12,7 @@ from msGait.models import EffectiveMovement
 
 from scipy.signal import welch
 from pydantic import ValidationError
+from typing import Any, cast
 
 
 class MovementDetector:
@@ -99,7 +101,7 @@ class MovementDetector:
         """Closing all the opened connections"""
         self.data_manager.close_all()
         
-    def fetch_sensor_data(self, start_time: str, end_time: str,
+    def fetch_sensor_data(self, start_time: str | pd.Timestamp | datetime, end_time: str | pd.Timestamp | datetime,
                           codeid_id: int, foot: str) -> pd.DataFrame:
         """Fetches raw sensor data from InfluxDB for a specific time interval and limb.
 
@@ -132,7 +134,7 @@ class MovementDetector:
         '''
 
         try:
-            result = self.data_manager.influxdb_client.query_api().query(
+            result = self.data_manager.get_influx_client().query_api().query(
                 query=query,
                 org=self.data_manager.config['influxdb']['org']
             )
@@ -151,8 +153,8 @@ class MovementDetector:
 
     def fetch_gps_data(
         self,
-        start_time: str,
-        end_time: str,
+        start_time: str | pd.Timestamp | datetime,
+        end_time: str | pd.Timestamp | datetime,
         codeid_id: int
     ) -> pd.DataFrame:
         """Fetches GPS data from InfluxDB for a specific time interval.
@@ -184,7 +186,7 @@ class MovementDetector:
         '''
 
         try:
-            result = self.data_manager.influxdb_client.query_api().query(
+            result = self.data_manager.get_influx_client().query_api().query(
                 query=query,
                 org=self.data_manager.config["influxdb"]["org"]
             )
@@ -348,7 +350,7 @@ class MovementDetector:
             fetch_start = group["start_time"].min() - padding
             fetch_end = group["end_time"].max() + padding
 
-            gps_raw = self.fetch_gps_data(fetch_start, fetch_end, int(codeid_id))
+            gps_raw = self.fetch_gps_data(fetch_start, fetch_end, int(cast(Any, codeid_id)))
             gps_track = self._prepare_gps_track(
                 gps_raw,
                 self.gps_resample_seconds
@@ -608,8 +610,8 @@ class MovementDetector:
                 print(i18n._("MSG_TMP_IDS").format(id=row.CodeID,ref=row.codeid_id,
                                 tstart=row.start_time,tend=row.end_time))
             try:
-                start = ensure_utc(row.start_time)
-                end = ensure_utc(row.end_time)
+                start = ensure_utc(cast(str | pd.Timestamp | datetime, row.start_time))
+                end = ensure_utc(cast(str | pd.Timestamp | datetime, row.end_time))
                 if end <= start:
                     if verbose >= 2:
                         print(f"Skipping invalid segment: start={start}, end={end}")
@@ -624,8 +626,8 @@ class MovementDetector:
                     print(i18n._("MVNT-TS-NOV").format(row=row))
                 continue
 
-            codeid_id = row.codeid_id
-            foot = row.foot
+            codeid_id = int(cast(Any, row.codeid_id))
+            foot = str(cast(Any, row.foot))
             cid = getattr(row, "CodeID", codeid_id)
 
             if verbose > 1:
@@ -633,7 +635,7 @@ class MovementDetector:
                     cid=cid, frm=start, dur=(end - start).total_seconds()
                 ))
 
-            sensor_data = self.fetch_sensor_data(start, end, codeid_id, foot)
+            sensor_data = self.fetch_sensor_data(cast(pd.Timestamp, start), cast(pd.Timestamp, end), codeid_id, foot)
             sensor_data.drop(columns=['result', 'table', '_start', '_stop'],
                              inplace=True, errors='ignore')
             for col in sensor_data.columns:
@@ -761,8 +763,8 @@ class MovementDetector:
                 return ts
             return ts.tz_convert("UTC").tz_localize(None)
 
-        df["start_time"] = df["start_time"].apply(_parse_mixed_utc_naive)
-        df["end_time"] = df["end_time"].apply(_parse_mixed_utc_naive)
+        df["start_time"] = pd.Series([_parse_mixed_utc_naive(value) for value in df["start_time"]], index=df.index)
+        df["end_time"] = pd.Series([_parse_mixed_utc_naive(value) for value in df["end_time"]], index=df.index)
         df = df.dropna(subset=["start_time", "end_time"]).copy()
 
         gait_rows: list[dict] = []

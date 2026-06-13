@@ -64,7 +64,7 @@ That second stage reads the previously built `activity_all` rows and derives:
 
 ## Configuration
 
-`msCodeID` relies on the shared project-level `config.yaml`.
+`msCodeID` relies on the shared project-level `config.yaml`, with optional local secret overrides loaded from `.env`.
 
 Relevant sections include:
 

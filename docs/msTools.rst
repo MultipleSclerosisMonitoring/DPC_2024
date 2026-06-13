@@ -3,8 +3,7 @@ msTools package
 
 The ``msTools`` package provides the shared infrastructure used by the rest of
 the repository. It centralizes configuration loading, time normalization,
-internationalization, data validation through Pydantic models, and database
-access for both InfluxDB and PostgreSQL.
+internationalization, data validation through Pydantic models, database access for both InfluxDB and PostgreSQL, and typed runtime settings loaded from ``config.yaml`` plus optional ``.env`` overrides.
 
 Architecture Overview
 ---------------------
@@ -103,6 +102,12 @@ Important public methods include:
 - ``close_influxdb() -> None``
 - ``close_all() -> None``
 
+``settings`` (``msTools.settings``)
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+This module provides typed runtime settings and configuration-path helpers for
+loading ``config.yaml`` with optional ``.env`` overrides.
+
 ``models`` (``msTools.models``)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
@@ -163,7 +168,14 @@ The package supports both main repository stages.
 Configuration
 -------------
 
-The package reads configuration from the project-level ``config.yaml``.
+The runtime configuration follows a hybrid model:
+
+- ``config.yaml`` stores structural and algorithm settings
+- ``.env`` can override local secrets and connection values
+- environment variables override both when present
+
+
+The package reads configuration from ``config.yaml``, with optional overrides from a local ``.env`` file. The repository includes ``.env.example`` as a documented template.
 
 Example:
 
@@ -218,6 +230,14 @@ Time utilities
 ~~~~~~~~~~~~~~
 
 .. automodule:: msTools.timeutils
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+Settings
+~~~~~~~~
+
+.. automodule:: msTools.settings
    :members:
    :undoc-members:
    :show-inheritance:

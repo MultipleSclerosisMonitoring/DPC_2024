@@ -17,8 +17,10 @@ class VAction(argparse.Action):
     def __call__(self, parser, namespace, values, option_string=None):
         if values is None:
             setattr(namespace, self.dest, getattr(namespace, self.dest) + 1)
-        else:
+        elif isinstance(values, str):
             setattr(namespace, self.dest, int(values))
+        else:
+            raise ValueError("Verbosity expects an optional integer value.")
 
 
 def main() -> None:
@@ -204,6 +206,7 @@ def main() -> None:
                 # Store activity_leg segments
                 if not activity_segL.empty:
                     if args.save == 1:
+                        assert activity_refL is not None
                         ids = data_manager.store_data("activity_leg", activity_refL, verbose=args.verbose)
                         if len(ids) != len(activity_refL):
                             raise RuntimeError("Failed to store all Left activity_leg rows.")
@@ -220,6 +223,7 @@ def main() -> None:
 
                 if not activity_segR.empty:
                     if args.save == 1:
+                        assert activity_refR is not None
                         ids = data_manager.store_data("activity_leg", activity_refR, verbose=args.verbose)
                         if len(ids) != len(activity_refR):
                             raise RuntimeError("Failed to store all Right activity_leg rows.")

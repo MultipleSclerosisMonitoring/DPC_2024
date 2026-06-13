@@ -28,7 +28,7 @@ The normal execution order is:
 ## Requirements
 
 - Python 3.11
-- the repository includes a template `config.yaml` file in the project root
+- the repository ships with `config.yaml` plus an optional `.env.example` template for local secret overrides
 - replace the `XXX` placeholders in that file with your real local connection values
 
 The public repository ships with a sanitized `config.yaml` template covering
@@ -74,6 +74,8 @@ movement:
   gps_min_speed_m_s:          0.2
   gps_max_speed_m_s:          3.0
 ```
+
+Environment variables override `.env`, and `.env` overrides the values declared in `config.yaml`.
 
 ## Installation
 
