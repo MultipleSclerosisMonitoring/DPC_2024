@@ -159,8 +159,17 @@ class GaitGroundTruthValidator:
         """Evaluate all rows from the Ground Truth Excel."""
         df = self.ground_truth.copy()
 
-        df["from"] = pd.to_datetime(df["from"], errors="coerce")
-        df["until"] = pd.to_datetime(df["until"], errors="coerce")
+        df["from"] = (
+            pd.to_datetime(df["from"], errors="coerce")
+            .dt.tz_localize("Europe/Madrid", ambiguous="NaT", nonexistent="shift_forward")
+            .dt.tz_convert("UTC")
+        )
+
+        df["until"] = (
+            pd.to_datetime(df["until"], errors="coerce")
+            .dt.tz_localize("Europe/Madrid", ambiguous="NaT", nonexistent="shift_forward")
+            .dt.tz_convert("UTC")
+        )
 
         bad_dates = df["from"].isna() | df["until"].isna()
         if bad_dates.any():
@@ -238,6 +247,9 @@ class GaitGroundTruthValidator:
         )
         print("\nClassification report:\n")
         print(report)
+
+        detailed["from"] = detailed["from"].dt.tz_localize(None)
+        detailed["until"] = detailed["until"].dt.tz_localize(None)
 
         if output_path:
             output_file = Path(output_path)

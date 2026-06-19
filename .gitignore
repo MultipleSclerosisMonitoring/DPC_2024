@@ -50,3 +50,7 @@ tests/ground_truth_windows.xlsx
 tests/*.tmp.xlsx
 
 tests/ground_truth_labeled_completed.xlsx
+# Ground-truth validation artifacts
+tests/**/*.xlsx
+tests/gt_v*/
+tests/_archive_gt_old/
