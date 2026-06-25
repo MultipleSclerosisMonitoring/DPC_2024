@@ -1,162 +1,106 @@
 # msTools
 
-Shared utility package for the MS Monitoring project.
+Shared infrastructure for the MS Monitoring repository.
 
-`msTools` provides the infrastructure used by the rest of the repository:
-configuration loading, time normalization, internationalization, shared
-Pydantic models, and database access for both InfluxDB and PostgreSQL.
+`msTools` is the integration substrate used by the rest of the codebase. It
+centralizes configuration loading, UTC normalization, translations, typed data
+models, and database access for both InfluxDB and PostgreSQL.
 
-## Responsibilities
+## Why this package matters
 
-The package centers on `DataManager`, which is responsible for:
+The repository has two executable stages, but both depend on the same core
+services:
 
-- loading `config.yaml`
-- creating and closing PostgreSQL and InfluxDB connections
-- retrieving CodeIDs from InfluxDB
+- connection management
+- configuration loading
+- timezone handling
+- semantic row validation
+- idempotent persistence
+
+That common layer lives in `msTools`.
+
+## Package overview
+
+```mermaid
+flowchart LR
+    Settings[settings.py] --> DataManager
+    TimeUtils[timeutils.py] --> DataManager
+    I18N[i18n.py] --> DataManager
+    Models[models.py] --> DataManager
+    DataManager --> Stage1[msCodeID / find_mscodeids]
+    DataManager --> Stage2[msGait / find_gait]
+```
+
+## Main responsibilities
+
+`DataManager` is the central class of the package. It is responsible for:
+
+- loading `config.yaml` with optional `.env` overrides
+- opening and closing PostgreSQL and InfluxDB connections
+- retrieving CodeIDs and raw references from InfluxDB
 - retrieving `activity_all` windows from PostgreSQL
-- expanding bilateral windows into leg-level rows
-- validating and storing semantic tables with idempotent inserts
-- updating GPS-related fields in `effective_gait` when required
+- expanding bilateral windows into per-leg rows
+- validating rows with Pydantic before insertion
+- storing semantic tables with idempotent behavior
+- ensuring `effective_gait` can persist `gait_confidence_level`
+- updating GPS enrichment fields for existing `effective_gait` rows
 
-It also includes:
+## Main modules
 
-- `settings.py` for typed configuration loading and `.env` overrides
-- `models.py` for shared Pydantic models
-- `timeutils.py` for UTC normalization
-- `i18n.py` for gettext-based translations
+### `data_manager.py`
 
-## Main Components
+Provides the integration class used across the repository.
 
-### `DataManager` (`data_manager.py`)
+### `settings.py`
 
-Main methods include:
+Provides typed configuration loading and override precedence:
 
-- `__init__(config_path: str) -> None`
-- `load_config(config_path: str) -> dict[str, Any]`
-- `get_config(sect: str) -> dict[str, Any] | None`
-- `get_influx_client() -> InfluxDBClient`
-- `get_codeids_in_range(start_datetime: str, end_datetime: str) -> list[str]`
-- `fetch_data(query: str) -> pandas.DataFrame`
-- `segments_retrieval(fstart: str | None = None, fend: str | None = None, ids: list[int] | None = None, verbose: int = 0) -> pandas.DataFrame`
-- `recover_activity_all(act: pandas.DataFrame, verbose: int = 0) -> pandas.DataFrame`
-- `store_codeid(codeid: str, verbose: int = 0) -> tuple[int, bool]`
-- `transform_activityleg(data: pandas.DataFrame) -> pandas.DataFrame`
-- `store_data(table_name: str, data: pandas.DataFrame, verbose: int = 1) -> list[int]`
-- `get_real_codeid(codeid_id: int) -> str`
-- `get_codeid_id_by_value(codeid: str) -> int | None`
-- `get_record_all_legs(clegs: set, clname: str = "codeleg_ids") -> pandas.DataFrame`
-- `get_activity_ids_by_start_date_range(start_datetime: str | datetime, end_datetime: str | datetime) -> list[int]`
-- `close_pg() -> None`
-- `close_influxdb() -> None`
-- `close_all() -> None`
+1. environment variables
+2. `.env`
+3. `config.yaml`
 
 ### `models.py`
 
-Shared Pydantic models used before writing data to PostgreSQL:
-
-- `CodeID`
-- `ActivityLeg`
-- `ActivityAll`
+Defines shared Pydantic models used before PostgreSQL insertion.
 
 ### `timeutils.py`
 
-Contains:
-
-- `ensure_utc(ts: str | pandas.Timestamp | datetime) -> pandas.Timestamp`
-
-This helper converts local or timezone-aware timestamps into UTC-aware pandas
-timestamps, which is essential for keeping PostgreSQL and InfluxDB queries
-consistent.
+Provides `ensure_utc(...)`, which normalizes timestamps before database access.
+Naive timestamps are interpreted as Europe/Madrid local time and converted to
+UTC.
 
 ### `i18n.py`
 
-Provides lightweight internationalization helpers:
+Provides gettext-based translation helpers for CLI output.
 
-- `detect_language(...)`
-- `available_languages(...)`
-- `init_translation(...)`
-- `set_locale_for_formatting(...)`
-- `gettext(...)`
+## How it fits into the pipeline
 
-## How `msTools` fits into the pipeline
+### Stage 1 support
 
-`msTools` supports both major stages of the repository workflow:
+- query raw references from InfluxDB
+- transform `activity_leg` rows
+- persist `codeids`, `activity_leg`, and `activity_all`
 
-### Stage 1: bottom-up semantic construction
+### Stage 2 support
 
-- raw wearable data is queried from InfluxDB
-- `activity_leg` is built per foot
-- bilateral overlaps are merged into `activity_all`
+- read `activity_all`
+- expand bilateral windows into leg-wise rows
+- persist `effective_movement`
+- persist `effective_gait` with GPS enrichment and `gait_confidence_level`
 
-### Stage 2: movement and gait detection
+## Storage note
 
-- `activity_all` windows are read back from PostgreSQL
-- bilateral windows are expanded into per-leg rows
-- downstream modules derive `effective_movement`
-- bilateral gait events are stored in `effective_gait`
-- `effective_gait` may be enriched with GPS metrics
+`effective_gait` is no longer only a duration-based gait table. It now stores
+both enrichment fields and a graded confidence semantic:
 
-## Configuration
-
-The package reads configuration from `config.yaml`, with optional overrides from a local `.env` file. The repository includes `.env.example` as a documented template.
-
-Example:
-
-```yaml
-influxdb:
-  url: "https://<HOST>:8086"
-  token: "<YOUR_TOKEN>"
-  org: "<ORG>"
-  bucket: "<BUCKET>"
-  measurement: "<MEASUREMENT>"
-  verify: false
-  timeout: 900000
-
-postgresql:
-  host: "<PG_HOST>"
-  port: 5432
-  user: "<USER>"
-  password: "<PASSWORD>"
-  database: "<DB_NAME>"
-```
-
-## Usage example
-
-```python
-from msTools.data_manager import DataManager
-
-manager = DataManager(config_path="config.yaml")
-
-codeids = manager.get_codeids_in_range(
-    "2025-05-11 00:00:00",
-    "2025-05-12 00:00:00",
-)
-print(codeids)
-
-manager.close_all()
-```
-
-## Notes
-
-- semantic timestamps are handled with timezone awareness
-- PostgreSQL inserts are validated with Pydantic models
-- the storage logic is designed to be idempotent for the main semantic tables
-- `effective_gait` may include GPS enrichment fields such as distance, elapsed time, average speed, and validation flag
+- `gait_confidence_level = 1`: brief bilateral gait
+- `gait_confidence_level = 2`: robust bilateral gait
 
 ## Documentation
 
-Full Sphinx documentation is available in `docs/`.
-
-```bash
-cd docs
-make html
-```
-
-## Requirements
-
-- Python 3.11
-- project dependencies installed through `poetry install` or `pip install -r requirements.txt`
+- Sphinx package page: [`docs/msTools.rst`](../docs/msTools.rst)
+- repository architecture: [`docs/architecture.rst`](../docs/architecture.rst)
 
 ## License
 
-MIT License. See the root `LICENSE` file for details.
+MIT. See the root [`LICENSE`](../LICENSE).

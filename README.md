@@ -3,117 +3,119 @@
 
 # MS Monitoring
 
-Modular Python utilities for processing wearable-device data in multiple
-sclerosis monitoring studies.
+Modular Python utilities for transforming raw wearable-device telemetry into
+semantic activity windows, movement detections, and graded bilateral gait
+signals for multiple sclerosis monitoring studies.
 
-The repository is organized around a two-stage pipeline:
+## Why this repository exists
 
-1. bottom-up semantic construction from raw wearable references
-2. movement and gait detection over previously stored semantic windows
+The project is built around a blind processing pipeline. It does not classify
+clinical tests directly from the start. Instead, it progressively turns raw
+telemetry into more interpretable semantic layers that can later be checked
+against known clinical protocols. In that sense, the repository should be read
+as a semantic digital health pipeline rather than as a standalone validated
+clinical gait instrument.
 
----
+Those layers are:
 
-## Table of Contents
+- `codeids`
+- `activity_leg`
+- `activity_all`
+- `effective_movement`
+- `effective_gait`
+- optional clinical-test intervals aligned later as annotations
 
-1. [High-Level Workflow](#high-level-workflow)
-2. [Directory Structure](#directory-structure)
-3. [Requirements](#requirements)
-4. [Installation](#installation)
-5. [Configuration](#configuration)
-6. [Validation](#validation)
-7. [Documentation](#documentation)
-8. [Contributing](#contributing)
-9. [License](#license)
+`codeids` can also act as a lightweight operational inventory when it contains
+optional metadata fields such as `type`, `bucket`, `first_seen_at`, and
+`last_seen_at`.
 
----
+When the optional timestamp columns are present, `find_mscodeids` keeps them
+up to date by applying minimum/maximum semantics to the observed raw-data
+window for each CodeID.
 
-## High-Level Workflow
+`effective_gait` now exposes a unified confidence model:
 
-### 1. `find_mscodeids`
+- `gait_confidence_level = 1`: brief bilateral gait
+- `gait_confidence_level = 2`: robust bilateral gait
 
-Extracts distinct device `CodeID` values from InfluxDB, builds `activity_leg`
-(bottom-up per foot), and merges bilateral temporal overlaps into `activity_all`
-for PostgreSQL persistence.
+That extension is important for post-hoc compatibility analysis, especially for
+short clinical tests such as TUG and T25FW.
 
-### 2. `find_gait`
+## End-to-end view
 
-Processes stored `activity_all` windows, retrieves raw inertial signals,
-resamples them to a fixed frequency, applies spectral and temporal checks to
-detect `effective_movement`, derives bilateral `effective_gait`, and enriches
-gait episodes with GPS-based metrics.
+```mermaid
+flowchart LR
+    A[Raw telemetry in InfluxDB] --> B[find_mscodeids]
+    B --> C[activity_leg]
+    C --> D[activity_all]
+    D --> E[find_gait]
+    E --> F[effective_movement]
+    F --> G[effective_gait\nbrief or robust]
+    G --> H[Post-hoc clinical compatibility checks]
+```
 
-## Directory Structure
+## Repository structure
 
 ```text
 .
-├── requirements.txt       # Pip dependencies
-├── pyproject.toml         # Poetry project definition
-├── docs/                  # Sphinx documentation
-├── static/                # Reference figures and legacy diagrams
-├── msTools/               # Shared utilities package
-├── msCodeID/              # CodeID extraction and activity segmentation
-├── msGait/                # Movement and gait detection
-├── ms_monitoring/         # CLI entry-point scripts
-├── tests/                 # Ground-truth validation utilities
-└── README.md              # This file
+├── docs/                  Sphinx documentation
+├── msTools/               Shared infrastructure and database access
+├── msCodeID/              Bottom-up semantic construction
+├── msGait/                Inertial movement and gait detection
+├── ms_monitoring/         CLI entry points for both stages
+├── tests/                 Ground-truth validation utilities
+├── verification/          Threshold studies and compatibility reports
+├── static/                Legacy figures and generated diagrams
+├── requirements.txt       Pip dependencies
+├── pyproject.toml         Poetry project definition
+└── README.md              This file
 ```
 
-## Requirements
+## Functional architecture
 
-- Python 3.11
-- PostgreSQL
-- InfluxDB
-- the repository ships with a `config.yaml` template and an optional `.env.example` for local secret overrides
+### Stage 1: bottom-up semantic construction
 
-## Installation
+The first stage discovers participants in a time range and creates semantic
+candidate windows from raw wearable references.
 
-### With Poetry
+Outputs:
 
-```bash
-curl -sSL https://install.python-poetry.org | python3 -
-git clone https://github.com/MultipleSclerosisMonitoring/DPC_2024.git
-cd DPC_2024
-poetry install
-poetry shell
-```
+- `codeids`
+- `activity_leg`
+- `activity_all`
 
-### With pip
+### Stage 2: movement and graded gait detection
 
-```bash
-python -m venv venv
-source venv/bin/activate          # On Windows: venv\Scripts\activate
-pip install -r requirements.txt
-```
+The second stage reuses `activity_all` as input, fetches inertial and GPS data,
+detects per-leg movement, derives bilateral gait, and enriches the result.
+
+Outputs:
+
+- `effective_movement`
+- `effective_gait`
+- optional clinical-test intervals aligned later as annotations
+- `gps_*` enrichment fields
+- `gait_confidence_level`
+
+## Package responsibilities
+
+- `msTools`: shared configuration, time normalization, i18n, models, and DB access
+- `msCodeID`: bottom-up semantic segmentation from raw reference streams
+- `msGait`: inertial movement detection and graded bilateral gait detection
+- `ms_monitoring`: CLI orchestration for both executable stages
+- `tests` and `verification`: validation, threshold studies, and post-hoc reports
 
 ## Configuration
 
 The repository uses a hybrid configuration model:
 
-- `config.yaml` stores the structural project configuration and algorithm parameters
+- `config.yaml` stores structural project configuration and algorithm parameters
 - `.env` can override local secrets and connection values
-- `.env.example` documents the supported environment variables
+- environment variables override both when present
 
-If you do not need environment overrides, `config.yaml` alone is still valid.
-
-Replace the `XXX` placeholders with your real local connection values:
+Example movement section:
 
 ```yaml
-influxdb:
-  url:         "https://<HOST>:8086"
-  token:       "<YOUR_TOKEN>"
-  org:         "<ORG>"
-  bucket:      "<BUCKET>"
-  measurement: "<MEASUREMENT>"
-  verify:      false
-  timeout:     900000
-
-postgresql:
-  host:        "<PG_HOST>"
-  port:        5432
-  user:        "<USER>"
-  password:    "<PASSWORD>"
-  database:    "<DB_NAME>"
-
 movement:
   accel_threshold:            0.2
   gyro_threshold:             60
@@ -126,7 +128,7 @@ movement:
   resample_hz:                100.0
   window_size_samples:        256
   min_window_fraction:        0.5
-  min_effective_duration_sec: 6.0
+  min_effective_duration_sec: 3.0
   min_gait_duration_sec:      6.0
   gps_resample_seconds:       10
   gps_padding_seconds:        15
@@ -136,68 +138,43 @@ movement:
   gps_max_speed_m_s:          3.0
 ```
 
-## Optional `.env` overrides
-
-```dotenv
-MS_MONITORING_CONFIG=config.yaml
-INFLUXDB_URL=https://your-influx-host:8086
-INFLUXDB_TOKEN=replace-me
-POSTGRESQL_HOST=localhost
-POSTGRESQL_PASSWORD=replace-me
-```
-
-Environment variables take precedence over `.env`, and `.env` takes precedence over `config.yaml`.
-
-## Notes on the `movement` section
-
-- `sampling_rate` is the nominal acquisition-rate reference
-- `resample_hz` is the fixed interpolation/alignment frequency used before inertial windowing
-- `window_size_samples` controls the analysis-window length in samples
-- `min_window_fraction` allows preserving the last partial analysis window when it is large enough
-- `effective_gait` can be enriched with GPS-derived metrics such as travelled distance, elapsed time, average speed, and a boolean GPS validation flag
-
-## Validation
-
-The repository includes empirical validation utilities in `tests/`, based on a ground-truth Excel file with manually labeled windows.
-
-Example:
+## Typical execution order
 
 ```bash
-python -m tests.validate_ground_truth \
-  -e path/to/ground_truth.xlsx \
-  -c config.yaml \
-  -l es
+python -m ms_monitoring.check_user_tokens_multi -c config.yaml -b "Gait/autogen,MbientLab/autogen,SmartBand/autogen" --lookback-minutes 15 -v 1
+
+python -m ms_monitoring.find_mscodeids -c config.yaml -f "2025-05-11 00:00:00" -u "2025-05-12 00:00:00" --save 1
+
+python -m ms_monitoring.find_gait -c config.yaml -i "152,153" --save 1
 ```
 
-This validation reports metrics such as:
+For scheduled daily execution on a closed operational window, prefer:
 
-- accuracy
-- precision
-- recall / sensitivity
-- specificity
-- F1-score
-- Cohen's Kappa
-- confusion matrix
+```bash
+python -m ms_monitoring.run_daily_pipeline -c config.yaml --save 1 -v 1
+```
 
 ## Documentation
 
-Full Sphinx documentation is available in `docs/`. 
+- Sphinx entry point: `docs/index.rst`
+- system architecture: `docs/architecture.rst`
+- package/module overview: `docs/modules.rst`
+- package READMEs: `msTools/README.md`, `msCodeID/README.md`, `msGait/README.md`, `ms_monitoring/README.md`
 
-To rebuild locally:
+To build the Sphinx site locally:
 
 ```bash
 cd docs
 make html
 ```
 
-Then open `_build/html/index.html` in your browser.
+## Validation and reporting
 
-## Contributing
+The repository includes:
 
-1. Fork the repo  
-2. Create a branch: `git checkout -b feature/your-feature`  
-3. Make your changes & tests  
-4. Open a Pull Request
+- ground-truth validation in `tests/`
+- threshold comparison studies in `verification/`
+- post-hoc gait compatibility reports that distinguish `none`, `brief`, and `robust`
 
 ## License
 

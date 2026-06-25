@@ -1,0 +1,6 @@
+test_name,events,codeid_missing,effective_movement_detected,gait_none,gait_brief,gait_robust,brief_rows_total,robust_rows_total,coverage_effective_gait_none,coverage_effective_gait_partial,coverage_effective_gait_full
+2MWT,9,2,6,1,0,6,2,11,9,0,0
+6MWT,246,57,170,30,0,159,17,261,197,49,0
+T25FW,187,41,100,78,42,26,43,32,168,4,15
+TUG,121,28,67,48,23,22,23,27,110,3,8
+TOTAL,563,128,343,157,65,213,85,331,484,56,23

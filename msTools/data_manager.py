@@ -461,6 +461,31 @@ class DataManager:
             print(i18n._("PGSQL-INS-COD-ERR").format(e=e))
             raise
 
+    def update_codeid_seen_at(
+        self,
+        codeid_id: int,
+        first_seen_at: str | pd.Timestamp | datetime.datetime,
+        last_seen_at: str | pd.Timestamp | datetime.datetime,
+    ) -> None:
+        """Update codeid first_seen_at and last_seen_at using min/max semantics."""
+        first_seen = ensure_utc(first_seen_at)
+        last_seen = ensure_utc(last_seen_at)
+
+        pg_conn = self._require_pg_conn()
+        with pg_conn.cursor() as cursor:
+            cursor.execute(
+                """
+                UPDATE codeids
+                SET first_seen_at = LEAST(COALESCE(first_seen_at, %s), %s),
+                    last_seen_at = GREATEST(COALESCE(last_seen_at, %s), %s)
+                WHERE id = %s
+                """,
+                (first_seen, first_seen, last_seen, last_seen, codeid_id),
+            )
+            if getattr(cursor, "rowcount", None) == 0:
+                raise RuntimeError(f"CodeID id {codeid_id} does not exist.")
+            pg_conn.commit()
+
     def transform_activityleg(self, data: pd.DataFrame) -> pd.DataFrame:
         """Transform raw leg-segment data into the schema expected by `activity_leg`.
 
@@ -881,17 +906,12 @@ class DataManager:
         row_id: int,
         row: dict[str, Any]
     ) -> None:
-        """Update GPS enrichment fields for an existing `effective_gait` row.
-
-        Args:
-            cursor: Open PostgreSQL cursor.
-            row_id: Identifier of the row to update.
-            row: Dictionary containing the GPS-related values to persist.
-        """
+        """Update GPS enrichment fields for an existing `effective_gait` row."""
         cursor.execute(
             """
             UPDATE effective_gait
-            SET gps_points = %s,
+            SET gait_confidence_level = %s,
+                gps_points = %s,
                 gps_distance_m = %s,
                 gps_elapsed_sec = %s,
                 gps_avg_speed_m_s = %s,
@@ -899,6 +919,7 @@ class DataManager:
             WHERE id = %s
             """,
             (
+                row.get("gait_confidence_level"),
                 row.get("gps_points"),
                 row.get("gps_distance_m"),
                 row.get("gps_elapsed_sec"),

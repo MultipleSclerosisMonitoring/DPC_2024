@@ -1,6 +1,10 @@
 CREATE TABLE IF NOT EXISTS codeids (
     id SERIAL PRIMARY KEY,
-    codeid TEXT UNIQUE NOT NULL  -- Unique CodeID value
+    codeid TEXT UNIQUE NOT NULL,  -- Unique CodeID value
+    type TEXT,                    -- Optional inventory metadata from InfluxDB
+    bucket TEXT,                  -- Optional inventory metadata from InfluxDB
+    first_seen_at TIMESTAMPTZ,    -- First time the code was observed by fast inventory sync
+    last_seen_at TIMESTAMPTZ      -- Last time the code was observed by fast inventory sync
 );
 
 CREATE TABLE IF NOT EXISTS effective_movement (
@@ -68,6 +72,7 @@ CREATE TABLE IF NOT EXISTS effective_gait (
     start_time TIMESTAMPTZ NOT NULL,
     end_time TIMESTAMPTZ NOT NULL,
     duration NUMERIC NOT NULL,
+    gait_confidence_level SMALLINT NOT NULL,
     gps_points INTEGER,
     gps_distance_m DOUBLE PRECISION,
     gps_elapsed_sec DOUBLE PRECISION,

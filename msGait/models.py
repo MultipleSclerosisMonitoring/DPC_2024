@@ -14,6 +14,7 @@ class EffectiveGait(BaseModel):
     start_time: str
     end_time: str
     duration: float
+    gait_confidence_level: int
     gps_points: int | None = None
     gps_distance_m: float | None = None
     gps_elapsed_sec: float | None = None

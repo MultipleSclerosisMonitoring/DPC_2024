@@ -54,3 +54,42 @@ def test_summarize_prepared_gps_track_returns_validation_metrics() -> None:
     assert summary["gps_distance_m"] > 0
     assert summary["gps_elapsed_sec"] == 20.0
     assert summary["gps_validated"] is True
+
+
+
+def test_detect_effective_gait_assigns_brief_and_robust_levels() -> None:
+    detector = MovementDetector.__new__(MovementDetector)
+    detector.min_effective_duration_sec = 3.0
+    detector.min_gait_duration_sec = 6.0
+
+    df_effective = pd.DataFrame(
+        [
+            {"codeid_id": 1, "start_time": "2026-01-01T10:00:00", "end_time": "2026-01-01T10:00:05", "duration": 5.0, "leg": "Left"},
+            {"codeid_id": 1, "start_time": "2026-01-01T10:00:00", "end_time": "2026-01-01T10:00:05", "duration": 5.0, "leg": "Right"},
+            {"codeid_id": 1, "start_time": "2026-01-01T10:01:00", "end_time": "2026-01-01T10:01:08", "duration": 8.0, "leg": "Left"},
+            {"codeid_id": 1, "start_time": "2026-01-01T10:01:00", "end_time": "2026-01-01T10:01:08", "duration": 8.0, "leg": "Right"},
+        ]
+    )
+
+    df_gait = detector.detect_effective_gait(df_effective, verbose=0)
+
+    assert list(df_gait["gait_confidence_level"]) == [1, 2]
+    assert list(df_gait["duration"]) == [5.0, 8.0]
+
+
+
+def test_detect_effective_gait_ignores_bilateral_overlaps_shorter_than_brief_threshold() -> None:
+    detector = MovementDetector.__new__(MovementDetector)
+    detector.min_effective_duration_sec = 3.0
+    detector.min_gait_duration_sec = 6.0
+
+    df_effective = pd.DataFrame(
+        [
+            {"codeid_id": 1, "start_time": "2026-01-01T10:00:00", "end_time": "2026-01-01T10:00:02.500000", "duration": 2.5, "leg": "Left"},
+            {"codeid_id": 1, "start_time": "2026-01-01T10:00:00", "end_time": "2026-01-01T10:00:02.500000", "duration": 2.5, "leg": "Right"},
+        ]
+    )
+
+    df_gait = detector.detect_effective_gait(df_effective, verbose=0)
+
+    assert df_gait.empty

@@ -1,0 +1,6 @@
+test_name,events,codeid_missing,effective_events_6s,effective_events_3s,new_effective_events,new_effective_from_coverage_none,gait_events_from_eff_6s,gait_events_from_eff_3s,new_gait_events,new_gait_from_coverage_none
+2MWT,9,2,6,6,0,0,6,6,0,0
+6MWT,246,57,170,170,0,0,159,159,0,0
+T25FW,187,41,34,100,66,58,26,26,0,0
+TUG,121,28,29,67,38,36,22,22,0,0
+TOTAL,563,128,239,343,104,94,213,213,0,0

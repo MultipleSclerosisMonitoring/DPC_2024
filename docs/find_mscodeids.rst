@@ -81,6 +81,8 @@ The command may generate:
 - new rows in ``codeids``
 - per-foot rows in ``activity_leg``
 - bilateral rows in ``activity_all``
+- optional updates to ``codeids.first_seen_at`` and ``codeids.last_seen_at`` when
+  the extended metadata columns are present
 
 Rows with no valid segments for one foot are handled gracefully. In that case,
 the missing foot is reported and only the valid semantic outputs are produced.
@@ -94,7 +96,7 @@ Implementation notes
 - bilateral activity is built through temporal overlap between left and right
   leg segments
 - storage goes through ``DataManager.store_data(...)`` with validation and
-  idempotent behaviour for the semantic tables
+  idempotent behavior for the semantic tables
 
 API reference
 -------------

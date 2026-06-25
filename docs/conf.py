@@ -35,6 +35,10 @@ autodoc_default_options = {
     'undoc-members': True,
     'private-members': True,
 }
+autodoc_mock_imports = [
+    'influxdb_client',
+    'psycopg2',
+]
 
 language = 'en'
 

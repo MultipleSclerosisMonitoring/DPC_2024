@@ -3,9 +3,9 @@ find_gait
 
 The ``find_gait`` command-line tool is the second executable stage of the
 pipeline. It reads bilateral activity windows from PostgreSQL, retrieves raw
-inertial data from InfluxDB, detects effective movement in each leg, derives
-bilateral gait episodes, enriches those episodes with GPS-based metrics, and
-optionally stores the results in PostgreSQL.
+inertial and GPS data from InfluxDB, detects effective movement in each leg,
+derives bilateral gait episodes, classifies them by confidence, enriches them
+with GPS-based metrics, and optionally stores the results in PostgreSQL.
 
 Purpose
 -------
@@ -18,8 +18,9 @@ This command performs the movement and gait detection stage of the project:
 4. resample the inertial series to a fixed temporal grid
 5. detect ``effective_movement`` from spectral and temporal criteria
 6. intersect left and right effective movement to derive ``effective_gait``
-7. enrich gait intervals with GPS-derived metrics
-8. optionally store ``effective_movement`` and ``effective_gait``
+7. assign ``gait_confidence_level`` to each bilateral episode
+8. enrich gait intervals with GPS-derived metrics
+9. optionally store ``effective_movement`` and ``effective_gait``
 
 Input modes
 -----------
@@ -77,7 +78,7 @@ The command performs the following steps:
 5. detect per-leg ``effective_movement``
 6. optionally store ``effective_movement``
 7. detect bilateral ``effective_gait``
-8. validate/enrich gait intervals with GPS-derived metrics
+8. validate and enrich gait intervals with GPS-derived metrics
 9. optionally store ``effective_gait``
 
 Detection details
@@ -96,9 +97,20 @@ The inertial stage is based on:
 The gait stage is based on:
 
 - temporal overlap between left and right effective-movement intervals
-- minimum gait-duration filtering
+- a graded confidence interpretation of bilateral overlap
 - optional GPS enrichment using distance, elapsed time, average speed, and a
   boolean validation flag
+
+Gait confidence semantics
+-------------------------
+
+``effective_gait`` is no longer purely binary.
+
+- ``gait_confidence_level = 1`` means brief bilateral gait
+- ``gait_confidence_level = 2`` means robust bilateral gait
+
+This is useful when the pipeline is executed blindly and test compatibility is
+checked later against external clinical intervals.
 
 GPS enrichment
 --------------
@@ -130,6 +142,7 @@ The command may generate:
 
 - per-leg rows in ``effective_movement``
 - bilateral rows in ``effective_gait`` enriched with GPS metrics
+- graded gait evidence through ``gait_confidence_level``
 
 Implementation notes
 --------------------
@@ -140,6 +153,8 @@ Implementation notes
 - the final partial inertial window can be kept when it is large enough
 - GPS enrichment is part of the final pipeline before storing
   ``effective_gait``
+- post-hoc compatibility reports can later interpret ``effective_gait`` as
+  ``none``, ``brief``, or ``robust`` depending on the confidence level
 
 API reference
 -------------

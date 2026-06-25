@@ -740,7 +740,7 @@ class MovementDetector:
         Returns:
             pd.DataFrame: Gait episodes, optionally enriched with GPS validation fields.
         """
-        base_columns = ["codeid_id", "start_time", "end_time", "duration"]
+        base_columns = ["codeid_id", "start_time", "end_time", "duration", "gait_confidence_level"]
         gps_columns = [
             "gps_points",
             "gps_distance_m",
@@ -768,6 +768,10 @@ class MovementDetector:
         df = df.dropna(subset=["start_time", "end_time"]).copy()
 
         gait_rows: list[dict] = []
+        brief_gait_duration_sec = min(
+            self.min_effective_duration_sec,
+            self.min_gait_duration_sec,
+        )
 
         for codeid, grp in df.groupby("codeid_id"):
             left = grp[grp["leg"] == "Left"][["start_time", "end_time"]]
@@ -786,13 +790,20 @@ class MovementDetector:
 
                 if start_time < end_time:
                     duration = (end_time - start_time).total_seconds()
+                    gait_confidence_level = 0
                     if duration >= self.min_gait_duration_sec:
+                        gait_confidence_level = 2
+                    elif duration >= brief_gait_duration_sec:
+                        gait_confidence_level = 1
+
+                    if gait_confidence_level > 0:
                         gait_rows.append(
                             {
                                 "codeid_id": codeid,
                                 "start_time": start_time,
                                 "end_time": end_time,
                                 "duration": duration,
+                                "gait_confidence_level": gait_confidence_level,
                             }
                         )
 

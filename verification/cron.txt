@@ -1,0 +1,2 @@
+*/6 * * * * /home/jordieres/soft/sclerosis/vpy-ms/bin/python -m ms_monitoring.check_user_tokens_multi -c /home/jordieres/soft/sclerosis/DPC_2024/.config.yaml -b "Gait/autogen,MbientLab/autogen,SmartBand/autogen" --lookback-minutes 15 -v 1 >> /home/jordieres/soft/sclerosis/cron/check_user_tokens_multi.log 2>&1
+9 3 * * * /home/jordieres/soft/sclerosis/vpy-ms/bin/python -m ms_monitoring.run_daily_pipeline -c /home/jordieres/soft/sclerosis/DPC_2024/.config.yaml --save 1 -v 1 >> /home/jordieres/soft/sclerosis/cron/run_daily_pipeline.log 2>&1

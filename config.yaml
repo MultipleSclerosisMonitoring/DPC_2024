@@ -37,7 +37,7 @@ movement:
   # Fracción mínima para aceptar la última ventana parcial
   min_window_fraction: 0.5
   # Duración mínima de un segmento efectivo tras el merge (s)
-  min_effective_duration_sec: 6.0
+  min_effective_duration_sec: 3.0
   # Duración mínima de un periodo de gait bilateral (s)
   min_gait_duration_sec: 6.0
 

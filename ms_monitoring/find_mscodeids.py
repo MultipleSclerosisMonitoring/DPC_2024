@@ -165,6 +165,16 @@ def main() -> None:
                     print(_("MSG_NO_DATA_FOR_CODEID").format(codeid=codeid))
                 continue
 
+            if args.save == 1 and codeid_id != -1:
+                try:
+                    observed_start = sensor_data['_time'].min()
+                    observed_end = sensor_data['_time'].max()
+                    if pd.isna(observed_start) or pd.isna(observed_end):
+                        raise ValueError("Unable to determine observed time range for CodeID data.")
+                    data_manager.update_codeid_seen_at(codeid_id, observed_start, observed_end)
+                except Exception as e:
+                    print(_("ERR_UPDATE_CODEID_SEEN_AT").format(codeid=codeid, error=str(e)))
+
             # Robust check: ensure 'Foot' column is present
             if 'Foot' not in sensor_data.columns:
                 print(_("ERR_FOOT_MISSING").format(codeid=codeid), file=sys.stderr)
