@@ -80,14 +80,29 @@ Provide one or more ``activity_all`` IDs with ``-i`` / ``--ids``:
 
 **Recent-hours mode**
 
-If ``--ids`` is omitted, the command retrieves candidate windows from the last
-``N`` hours:
+If ``--ids`` is omitted, the command can retrieve candidate windows from a
+relative lookback window using ``--hours-back``:
 
 .. code-block:: bash
 
    python -m ms_monitoring.find_gait \
      -c config.yaml \
      --hours-back 25 \
+     --mode full \
+     --save 0 \
+     -v 1
+
+**Explicit time-window mode**
+
+If you want a concrete interval, pass ``--from`` and ``--until``. When both are
+provided they take precedence over the relative lookback window:
+
+.. code-block:: bash
+
+   python -m ms_monitoring.find_gait \
+     -c config.yaml \
+     --from "2024-01-02T10:00:00" \
+     --until "2024-01-02T11:00:00" \
      --mode full \
      --save 0 \
      -v 1
@@ -103,7 +118,9 @@ The tool accepts the following arguments:
 - ``-o, --output``: optional XLSX export of raw sensor data (full mode only)
 - ``-v, --verbose``: verbosity level
 - ``--head-rows``: number of preview rows to print
-- ``--hours-back``: fallback time window when ``--ids`` is omitted
+- ``--hours-back``: fallback lookback window when neither ``--ids`` nor an explicit ``--from/--until`` range is provided
+- ``--from``: inclusive start timestamp for an explicit analysis window
+- ``--until``: inclusive end timestamp for an explicit analysis window
 - ``--mode``: execution mode (``full`` or ``fill-gait``, default ``full``)
 - ``--save``: whether to persist results in PostgreSQL (``1``) or run in dry mode (``0``)
 

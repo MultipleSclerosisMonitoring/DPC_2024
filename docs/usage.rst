@@ -109,13 +109,23 @@ Use ``find_gait`` to process previously created ``activity_all`` windows.
      --save 1 \
      -v 2
 
-If explicit IDs are omitted, the command can operate on a recent time window:
+If explicit IDs are omitted, the command can operate on a recent lookback window
+or on an explicit interval:
 
 .. code-block:: bash
 
    python -m ms_monitoring.find_gait \
      -c config.yaml \
      --hours-back 25 \
+     --save 0 \
+     -v 1
+
+.. code-block:: bash
+
+   python -m ms_monitoring.find_gait \
+     -c config.yaml \
+     --from "2024-01-02T10:00:00" \
+     --until "2024-01-02T11:00:00" \
      --save 0 \
      -v 1
 

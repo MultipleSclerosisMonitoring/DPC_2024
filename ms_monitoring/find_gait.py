@@ -2,6 +2,7 @@ import argparse
 from datetime import datetime, timedelta, timezone
 
 from msTools import i18n
+from msTools.timeutils import ensure_utc
 from msGait.movement_detector import MovementDetector
 
 
@@ -53,21 +54,40 @@ def parse_range_list(rango_str: str) -> list[int]:
     return sorted(result) # Devolver la lista ordenada
 
 
-def _default_last_hours_window(hours_back: int) -> tuple[str, str]:
-    """Return ISO timestamps (UTC) for the last ``hours_back`` hours window.
+def _format_utc_timestamp(value: datetime) -> str:
+    """Format a datetime as an ISO UTC string with a trailing ``Z`` suffix."""
+    if value.tzinfo is None:
+        value = value.replace(tzinfo=timezone.utc)
+    return value.astimezone(timezone.utc).isoformat().replace("+00:00", "Z")
 
-    Args:
-    hours_back: Number of hours to look back from *now*.
 
-    Returns:
-    tuple[str, str]: (fstart, fend) as ISO strings with "Z" suffix.
-    """
-    now = datetime.now(timezone.utc)
+def _default_last_hours_window(hours_back: int, now: datetime | None = None) -> tuple[str, str]:
+    """Return ISO timestamps (UTC) for the last ``hours_back`` hours window."""
+    now = now or datetime.now(timezone.utc)
     start = now - timedelta(hours=hours_back)
-    # Use Zulu format acceptable by Influx/our pipeline downstream
-    fstart = start.isoformat().replace("+00:00", "Z")
-    fend = now.isoformat().replace("+00:00", "Z")
-    return fstart, fend
+    return _format_utc_timestamp(start), _format_utc_timestamp(now)
+
+
+def _resolve_time_window(
+    from_date: str | None,
+    until_date: str | None,
+    hours_back: int,
+    now: datetime | None = None,
+) -> tuple[str, str]:
+    """Resolve the retrieval window from an explicit range or a last-hours fallback."""
+    if from_date is None and until_date is None:
+        return _default_last_hours_window(hours_back, now=now)
+
+    if now is None:
+        now = datetime.now(timezone.utc)
+
+    start_dt = ensure_utc(from_date).to_pydatetime() if from_date is not None else (now - timedelta(hours=hours_back))
+    end_dt = ensure_utc(until_date).to_pydatetime() if until_date is not None else now
+
+    if end_dt <= start_dt:
+        raise ValueError("The requested time window is invalid: --until must be after --from.")
+
+    return _format_utc_timestamp(start_dt), _format_utc_timestamp(end_dt)
 
 
 
@@ -115,7 +135,15 @@ def main() -> None:
     )
     parser.add_argument(
         "--hours-back", dest="hours_back", type=int, default=25,
-        help="If --ids is omitted, look back the last N hours (default: 25)."
+        help="If --ids is omitted and no explicit window is provided, look back the last N hours (default: 25)."
+    )
+    parser.add_argument(
+        "--from", dest="from_date", type=str, default=None,
+        help="Inclusive start timestamp for the analysis window."
+    )
+    parser.add_argument(
+        "--until", dest="until_date", type=str, default=None,
+        help="Inclusive end timestamp for the analysis window."
     )
     parser.add_argument(
         "--save", dest="save", type=int, choices=[0,1], default=1,
@@ -139,9 +167,17 @@ def main() -> None:
     fstart, fend = (None, None)
 
     if not use_ids:
-        # Fallback: last N hours window (defaults to 25h)
-        fstart, fend = _default_last_hours_window(args.hours_back)
-        if args.verbose >= 1:
+        try:
+            fstart, fend = _resolve_time_window(
+                from_date=args.from_date,
+                until_date=args.until_date,
+                hours_back=args.hours_back,
+            )
+        except ValueError as exc:
+            print(str(exc))
+            return
+
+        if args.from_date is None and args.until_date is None and args.verbose >= 1:
             print(_("FGAIT_USING_LAST_HOURS").format(n=args.hours_back))
 
     # Initialize the MovementDetector (internally handles DataManager and segment retrieval)

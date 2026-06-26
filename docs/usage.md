@@ -44,12 +44,21 @@ python -m ms_monitoring.find_gait \
   -v 2
 ```
 
-You can also run it in dry mode with a recent time window:
+You can also run it in dry mode with a recent time window or an explicit interval:
 
 ```bash
 python -m ms_monitoring.find_gait \
   -c config.yaml \
   --hours-back 25 \
+  --save 0 \
+  -v 1
+```
+
+```bash
+python -m ms_monitoring.find_gait \
+  -c config.yaml \
+  --from "2024-01-02T10:00:00" \
+  --until "2024-01-02T11:00:00" \
   --save 0 \
   -v 1
 ```
