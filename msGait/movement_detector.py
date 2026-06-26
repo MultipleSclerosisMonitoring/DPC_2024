@@ -818,21 +818,138 @@ class MovementDetector:
 
         return df_gait[output_columns]
 
-    def save_to_postgresql(self, table_name: str, df: pd.DataFrame, verbose: int = 0) -> None:
+    def save_to_postgresql(self, table_name: str, df: pd.DataFrame, verbose: int = 0) -> list[int]:
         """Saves the given DataFrame to a PostgreSQL table using the DataManager.
 
         Args:
             table_name (str): Name of the destination table.
             df (pd.DataFrame): DataFrame to store.
+            verbose (int): Verbosity level.
 
         Returns:
-            None
+            List of inserted or reused row IDs.
         """
-        if df.empty and verbose > 0:
-            print(i18n._("PGSQL-INS-TAB-NOD-ERR").format(table_name=table_name))
-            return
+        if df.empty:
+            if verbose > 0:
+                print(i18n._("PGSQL-INS-TAB-NOD-ERR").format(table_name=table_name))
+            return []
+
         try:
-            self.data_manager.store_data(table_name, df, verbose)
+            return self.data_manager.store_data(table_name, df, verbose)
         except Exception as e:
             print(i18n._("PGSQL-INS-TAB-ERR").format(table_name=table_name, e=e))
+            return []
+
+    def fill_missing_gait_from_postgres(
+        self,
+        start_datetime: str,
+        end_datetime: str,
+        verbose: int = 0
+    ) -> pd.DataFrame:
+        """Read effective_movement from PostgreSQL, identify missing gait records,
+        compute gait for only those rows, and enrich with GPS data.
+
+        Args:
+            start_datetime: Start of the time window.
+            end_datetime: End of the time window.
+            verbose: Verbosity level for console output.
+
+        Returns:
+            DataFrame of computed gait records for rows missing gait.
+        """
+        if verbose >= 1:
+            print(i18n._("FGAIT_FILL_MODE_INIT"))
+
+        # Read effective_movement from PostgreSQL
+        df_effective = self.data_manager.get_effective_movement_by_time_range(
+            start_datetime, end_datetime
+        )
+
+        if df_effective.empty:
+            print(i18n._("FGAIT_NO_EFF_MOV_FOUND"))
+            return pd.DataFrame()
+
+        if verbose >= 1:
+            print(i18n._("FGAIT_EFF_MOV_LOADED").format(n=len(df_effective)))
+
+        # Find which movement records don't have corresponding gait records
+        df_missing = self.data_manager.find_missing_gait_from_movement(df_effective, verbose)
+
+        if df_missing.empty:
+            print(i18n._("FGAIT_ALL_GAIT_EXISTS"))
+            return pd.DataFrame()
+
+        # Group by codeid_id to compute gait per CodeID
+        gait_rows = []
+        brief_gait_duration_sec = self.brief_gait_duration_sec
+        min_gait_duration_sec = self.min_gait_duration_sec
+
+        for codeid, group in df_missing.groupby("codeid_id"):
+            # Group by leg to prepare bilateral merging
+            left = group[group["leg"] == "L"].copy()
+            right = group[group["leg"] == "R"].copy()
+
+            if left.empty or right.empty:
+                continue
+
+            left = left.assign(_key=1)
+            right = right.assign(_key=1)
+            merged = left.merge(right, on="_key", suffixes=("_L", "_R")).drop(columns="_key")
+
+            for _, row in merged.iterrows():
+                start_time = max(row["start_time_L"], row["start_time_R"])
+                end_time = min(row["end_time_L"], row["end_time_R"])
+
+                if start_time < end_time:
+                    duration = (end_time - start_time).total_seconds()
+                    gait_confidence_level = 0
+                    if duration >= min_gait_duration_sec:
+                        gait_confidence_level = 2
+                    elif duration >= brief_gait_duration_sec:
+                        gait_confidence_level = 1
+
+                    if gait_confidence_level > 0:
+                        gait_rows.append(
+                            {
+                                "codeid_id": codeid,
+                                "start_time": start_time,
+                                "end_time": end_time,
+                                "duration": duration,
+                                "gait_confidence_level": gait_confidence_level,
+                            }
+                        )
+
+        base_columns = [
+            "codeid_id",
+            "start_time",
+            "end_time",
+            "duration",
+            "gait_confidence_level",
+        ]
+        gps_columns = [
+            "gps_points",
+            "gps_distance_m",
+            "gps_elapsed_sec",
+            "gps_avg_speed_m_s",
+            "gps_validated",
+        ]
+        output_columns = base_columns + gps_columns
+
+        df_gait = pd.DataFrame(gait_rows, columns=base_columns)
+
+        if df_gait.empty:
+            print(i18n._("NO_GAIT_PERIODS"))
+            return pd.DataFrame()
+
+        for col in gps_columns:
+            if col not in df_gait.columns:
+                df_gait[col] = pd.NA
+
+        df_gait = df_gait[output_columns]
+        df_gait = self.validate_gait_with_gps(df_gait, verbose)
+
+        if verbose >= 1:
+            print(i18n._("FGAIT_MISSING_COMPUTED").format(n=len(df_gait)))
+
+        return df_gait
 

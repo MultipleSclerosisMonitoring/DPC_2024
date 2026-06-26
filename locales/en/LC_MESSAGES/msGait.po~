@@ -80,6 +80,38 @@ msgstr "Periods of simultaneous effective gait (both feet):"
 msgid "GAIT_SAVED_COUNT"
 msgstr "Saved effective_gait records: {n}."
 
+#: ms_monitoring/find_gait.py:102
+msgid "GAIT_SAVE_FAILED"
+msgstr "Error storing data in the table: effective_gait"
+
+#: ms_monitoring/find_gait.py:93
+msgid "FGAIT_FILL_MODE_INIT"
+msgstr "Initializing fill-gait mode: reading from PostgreSQL..."
+
+#: ms_monitoring/find_gait.py:100
+msgid "FGAIT_NO_EFF_MOV_FOUND"
+msgstr "No effective_movement records found in the time window."
+
+#: ms_monitoring/find_gait.py:106
+msgid "FGAIT_EFF_MOV_LOADED"
+msgstr "Loaded {n} effective_movement records from PostgreSQL."
+
+#: msTools/data_manager.py:980
+msgid "FGAIT_MISSING_FOUND"
+msgstr "Found {n} movement records with missing gait entries."
+
+#: ms_monitoring/find_gait.py:115
+msgid "FGAIT_ALL_GAIT_EXISTS"
+msgstr "All effective_movement records already have corresponding gait entries."
+
+#: ms_monitoring/find_gait.py:123
+msgid "FGAIT_MISSING_COMPUTED"
+msgstr "Computed gait for {n} missing records."
+
+#: ms_monitoring/find_gait.py:87
+msgid "ERR_FILL_GAIT_NEEDS_TIME_WINDOW"
+msgstr "Error: --mode fill-gait requires either -i (IDs) or --hours-back (time window). Found neither."
+
 #: ms_monitoring/find_gait.py:99
 msgid "FGAIT_END"
 msgstr "Process Ended."

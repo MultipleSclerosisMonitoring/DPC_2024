@@ -121,6 +121,10 @@ def main() -> None:
         "--save", dest="save", type=int, choices=[0,1], default=1,
         help=_("ARG_SAVE")
     )
+    parser.add_argument(
+        "--mode", dest="mode", type=str, choices=["full", "fill-gait"], default="full",
+        help="Mode: 'full' (compute from leg data) or 'fill-gait' (compute only missing gait from PostgreSQL effective_movement)"
+    )
 
     # 4) Parse the remaining arguments
     args = parser.parse_args(remaining)
@@ -151,59 +155,92 @@ def main() -> None:
     )
 
     try:
-        # If no leg data was retrieved, exit
-        if detector.df_legs.empty:
-            return
+        # Handle two modes: full (compute from legs) or fill-gait (compute only missing from PostgreSQL)
+        if args.mode == "fill-gait":
+            # Mode: fill-gait - read effective_movement from PostgreSQL and compute only missing gait
+            if fstart is None or fend is None:
+                print(_("ERR_FILL_GAIT_NEEDS_TIME_WINDOW"))
+                return
 
-        if args.verbose >= 1:
-            print(_("FGAIT_1ST"))
+            df_gait = detector.fill_missing_gait_from_postgres(fstart, fend, args.verbose)
 
-        # Detect effective movements per leg
-        df_effective = detector.detect_effective_movement(
-            detector.df_legs,
-            args.fout,
-            args.verbose
-        )
-        if df_effective.empty:
-            print(_("FGAIT_NO_WALK"))
-            return
-
-        if args.verbose >= 2:
-            print(_("FGAIT_WKLS_FND"))
-            print(df_effective.head(args.head_rows))
-
-        # Optionally save effective_movement to PostgreSQL
-        if args.save == 1:
-            detector.save_to_postgresql("effective_movement", df_effective, args.verbose)
-            if args.verbose >= 1:
-                print(_("FGAIT_NUM_WALKS").format(ns=len(df_effective)))
-
-        # Detect simultaneous effective gait periods (both feet)
-        df_gait = detector.detect_effective_gait(df_effective, args.verbose)
-        df_gait = detector.validate_gait_with_gps(df_gait, args.verbose)
-
-        if df_gait.empty:
-            if args.verbose >= 1:
-                print(_("NO_GAIT_PERIODS"))
-        else:
-            if args.verbose >= 1:
-                print(_("GAIT_PERIODS_HEADER"))
-                if args.verbose >= 2:
-                    df_string = df_gait.to_string(index=False)
-                    indentation = "     "
-                    indented = "\n".join(indentation + line for line in df_string.splitlines())
-                    print(indented)
-
-            if args.save == 1:
-                detector.save_to_postgresql("effective_gait", df_gait, args.verbose)
+            if df_gait.empty:
                 if args.verbose >= 1:
-                    print(_("GAIT_SAVED_COUNT").format(n=len(df_gait)))
+                    print(_("NO_GAIT_PERIODS"))
+            else:
+                if args.verbose >= 1:
+                    print(_("GAIT_PERIODS_HEADER"))
+                    if args.verbose >= 2:
+                        df_string = df_gait.to_string(index=False)
+                        indentation = "     "
+                        indented = "\n".join(indentation + line for line in df_string.splitlines())
+                        print(indented)
+
+                if args.save == 1:
+                    inserted_ids = detector.save_to_postgresql("effective_gait", df_gait, args.verbose)
+                    if args.verbose >= 1:
+                        if inserted_ids:
+                            print(_("GAIT_SAVED_COUNT").format(n=len(inserted_ids)))
+                        else:
+                            print(_("GAIT_SAVE_FAILED"))
+
+        else:
+            # Mode: full (default) - compute from leg data
+            # If no leg data was retrieved, exit
+            if detector.df_legs.empty:
+                return
+
+            if args.verbose >= 1:
+                print(_("FGAIT_1ST"))
+
+            # Detect effective movements per leg
+            df_effective = detector.detect_effective_movement(
+                detector.df_legs,
+                args.fout,
+                args.verbose
+            )
+            if df_effective.empty:
+                print(_("FGAIT_NO_WALK"))
+                return
+
+            if args.verbose >= 2:
+                print(_("FGAIT_WKLS_FND"))
+                print(df_effective.head(args.head_rows))
+
+            # Optionally save effective_movement to PostgreSQL
+            if args.save == 1:
+                detector.save_to_postgresql("effective_movement", df_effective, args.verbose)
+                if args.verbose >= 1:
+                    print(_("FGAIT_NUM_WALKS").format(ns=len(df_effective)))
+
+            # Detect simultaneous effective gait periods (both feet)
+            df_gait = detector.detect_effective_gait(df_effective, args.verbose)
+            df_gait = detector.validate_gait_with_gps(df_gait, args.verbose)
+
+            if df_gait.empty:
+                if args.verbose >= 1:
+                    print(_("NO_GAIT_PERIODS"))
+            else:
+                if args.verbose >= 1:
+                    print(_("GAIT_PERIODS_HEADER"))
+                    if args.verbose >= 2:
+                        df_string = df_gait.to_string(index=False)
+                        indentation = "     "
+                        indented = "\n".join(indentation + line for line in df_string.splitlines())
+                        print(indented)
+
+                if args.save == 1:
+                    inserted_ids = detector.save_to_postgresql("effective_gait", df_gait, args.verbose)
+                    if args.verbose >= 1:
+                        if inserted_ids:
+                            print(_("GAIT_SAVED_COUNT").format(n=len(inserted_ids)))
+                        else:
+                            print(_("GAIT_SAVE_FAILED"))
 
         if args.verbose >= 1:
             print(_("FGAIT_END"))
     finally:
         detector.close()
-
 
 if __name__ == "__main__":
     main()

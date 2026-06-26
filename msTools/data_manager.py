@@ -928,3 +928,138 @@ class DataManager:
                 row_id,
             ),
         )
+
+    def get_effective_movement_by_time_range(
+        self,
+        start_datetime: str | datetime.datetime,
+        end_datetime: str | datetime.datetime
+    ) -> pd.DataFrame:
+        """Retrieve `effective_movement` rows by time range.
+
+        Args:
+            start_datetime: Start of the time window.
+            end_datetime: End of the time window.
+
+        Returns:
+            DataFrame with effective_movement records ordered by codeid_id and start_time.
+        """
+        try:
+            sdt = ensure_utc(start_datetime)
+            edt = ensure_utc(end_datetime)
+
+            query = """
+                SELECT id, codeid_id, start_time, end_time, duration, leg
+                FROM effective_movement
+                WHERE start_time >= %s AND start_time <= %s
+                ORDER BY codeid_id, start_time
+            """
+            pg_conn = self._require_pg_conn()
+            with pg_conn.cursor() as cur:
+                cur.execute(query, (sdt, edt))
+                if cur.description is None:
+                    raise RuntimeError("Query did not return a description.")
+                columns = [desc[0] for desc in cur.description]
+                data = cur.fetchall()
+                df = pd.DataFrame(data, columns=columns)
+                # Remove timezone info if present
+                for col in df.columns:
+                    if isinstance(df[col].dtype, DatetimeTZDtype):
+                        df[col] = df[col].dt.tz_localize(None)
+                return df
+        except Exception as e:
+            print(i18n._("PGSQL-QRY-GEN-ERR").format(e=e))
+            return pd.DataFrame()
+
+    def get_effective_gait_by_time_range(
+        self,
+        start_datetime: str | datetime.datetime,
+        end_datetime: str | datetime.datetime
+    ) -> pd.DataFrame:
+        """Retrieve `effective_gait` rows by time range.
+
+        Args:
+            start_datetime: Start of the time window.
+            end_datetime: End of the time window.
+
+        Returns:
+            DataFrame with effective_gait records ordered by codeid_id and start_time.
+        """
+        try:
+            sdt = ensure_utc(start_datetime)
+            edt = ensure_utc(end_datetime)
+
+            query = """
+                SELECT id, codeid_id, start_time, end_time, duration
+                FROM effective_gait
+                WHERE start_time >= %s AND start_time <= %s
+                ORDER BY codeid_id, start_time
+            """
+            pg_conn = self._require_pg_conn()
+            with pg_conn.cursor() as cur:
+                cur.execute(query, (sdt, edt))
+                if cur.description is None:
+                    raise RuntimeError("Query did not return a description.")
+                columns = [desc[0] for desc in cur.description]
+                data = cur.fetchall()
+                df = pd.DataFrame(data, columns=columns)
+                # Remove timezone info if present
+                for col in df.columns:
+                    if isinstance(df[col].dtype, DatetimeTZDtype):
+                        df[col] = df[col].dt.tz_localize(None)
+                return df
+        except Exception as e:
+            print(i18n._("PGSQL-QRY-GEN-ERR").format(e=e))
+            return pd.DataFrame()
+
+    def find_missing_gait_from_movement(
+        self,
+        df_effective: pd.DataFrame,
+        verbose: int = 0
+    ) -> pd.DataFrame:
+        """Filter effective_movement rows that have no corresponding effective_gait.
+
+        Args:
+            df_effective: DataFrame of effective_movement records.
+            verbose: Verbosity level for console output.
+
+        Returns:
+            DataFrame containing only movement records without a matching gait entry.
+        """
+        if df_effective.empty:
+            return pd.DataFrame()
+
+        # Get existing effective_gait records
+        min_time = df_effective["start_time"].min()
+        max_time = df_effective["end_time"].max()
+        df_gait_existing = self.get_effective_gait_by_time_range(min_time, max_time)
+
+        if df_gait_existing.empty:
+            # No gait records exist, all movements need gait calculation
+            return df_effective.copy()
+
+        # Create a comparison key from the movement data
+        # A movement is "missing" gait if no gait row matches its codeid_id and time window
+        df_movement_keyed = df_effective.copy()
+        df_movement_keyed["match_key"] = (
+            df_movement_keyed["codeid_id"].astype(str) + "|" +
+            df_movement_keyed["start_time"].astype(str) + "|" +
+            df_movement_keyed["end_time"].astype(str) + "|" +
+            df_movement_keyed["duration"].astype(str)
+        )
+
+        df_gait_keyed = df_gait_existing.copy()
+        df_gait_keyed["match_key"] = (
+            df_gait_keyed["codeid_id"].astype(str) + "|" +
+            df_gait_keyed["start_time"].astype(str) + "|" +
+            df_gait_keyed["end_time"].astype(str) + "|" +
+            df_gait_keyed["duration"].astype(str)
+        )
+
+        existing_keys = set(df_gait_keyed["match_key"])
+        missing_mask = ~df_movement_keyed["match_key"].isin(existing_keys)
+        missing = df_movement_keyed[missing_mask].drop(columns=["match_key"])
+
+        if verbose >= 1:
+            print(i18n._("FGAIT_MISSING_FOUND").format(n=len(missing)))
+
+        return missing

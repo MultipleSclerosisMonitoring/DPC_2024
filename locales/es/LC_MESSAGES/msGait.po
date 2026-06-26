@@ -265,6 +265,38 @@ msgstr "Periodos de marcha simultánea (ambos pies):"
 msgid "GAIT_SAVED_COUNT"
 msgstr "Registros de effective_gait guardados: {n}."
 
+#: ms_monitoring/find_gait.py:203
+msgid "GAIT_SAVE_FAILED"
+msgstr "Error al guardar datos en la tabla: effective_gait"
+
+#: ms_monitoring/find_gait.py:155
+msgid "FGAIT_FILL_MODE_INIT"
+msgstr "Iniciando modo fill-gait: leyendo desde PostgreSQL..."
+
+#: ms_monitoring/find_gait.py:162
+msgid "FGAIT_NO_EFF_MOV_FOUND"
+msgstr "No se encontraron registros de effective_movement en la ventana de tiempo."
+
+#: ms_monitoring/find_gait.py:168
+msgid "FGAIT_EFF_MOV_LOADED"
+msgstr "Se cargaron {n} registros de effective_movement desde PostgreSQL."
+
+#: msTools/data_manager.py:980
+msgid "FGAIT_MISSING_FOUND"
+msgstr "Se encontraron {n} registros de movimiento sin entradas de marcha correspondientes."
+
+#: ms_monitoring/find_gait.py:177
+msgid "FGAIT_ALL_GAIT_EXISTS"
+msgstr "Todos los registros de effective_movement ya tienen entradas de marcha correspondientes."
+
+#: ms_monitoring/find_gait.py:185
+msgid "FGAIT_MISSING_COMPUTED"
+msgstr "Se calculó la marcha para {n} registros faltantes."
+
+#: ms_monitoring/find_gait.py:149
+msgid "ERR_FILL_GAIT_NEEDS_TIME_WINDOW"
+msgstr "Error: --mode fill-gait requiere -i (IDs) o --hours-back (ventana temporal). No se encontró ninguno."
+
 #: ms_monitoring/find_gait.py:200
 msgid "FGAIT_END"
 msgstr "Proceso finalizado."

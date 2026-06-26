@@ -30,15 +30,29 @@ flowchart LR
 
 The package centers on `MovementDetector`, which is responsible for:
 
-- loading candidate bilateral windows
+- loading candidate bilateral windows (or reading from PostgreSQL)
 - reconstructing one row per leg
-- fetching inertial and GPS data from InfluxDB
+- fetching inertial and GPS data from InfluxDB (full mode) or reading from PostgreSQL (fill-gait mode)
 - resampling irregular telemetry
 - detecting `effective_movement`
 - deriving bilateral `effective_gait`
 - assigning `gait_confidence_level`
 - validating gait with GPS-derived metrics
 - optionally storing outputs in PostgreSQL
+
+### Modes of operation
+
+**Full mode** (default `--mode full`):
+- Reads `activity_all` from PostgreSQL
+- Detects `effective_movement` from raw sensor data
+- Computes `effective_gait` from full pipeline
+- Persists both movement and gait
+
+**Fill-gait mode** (`--mode fill-gait`):
+- Reads existing `effective_movement` from PostgreSQL
+- Finds movement records without corresponding gait
+- Computes `effective_gait` **only for missing entries**
+- Persists only newly computed gait (incremental, idempotent)
 
 ## Confidence semantics
 

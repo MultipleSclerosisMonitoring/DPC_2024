@@ -39,13 +39,34 @@ The first executable stage:
 
 The second executable stage:
 
-- reads `activity_all`
-- reconstructs one row per leg
-- fetches inertial and GPS data
-- detects `effective_movement`
+- reads `activity_all` or `effective_movement` from PostgreSQL
+- reconstructs one row per leg (or uses existing movement data)
+- fetches inertial and GPS data (full mode only)
+- detects `effective_movement` (full mode only)
 - derives `effective_gait`
 - enriches gait with GPS metrics
 - persists `gait_confidence_level` alongside gait rows
+
+### Execution modes
+
+`find_gait` supports two modes via `--mode`:
+
+1. **`full` (default)**: Complete pipeline
+   - Retrieves `activity_all` from PostgreSQL by ID or time window
+   - Computes `effective_movement` from leg data
+   - Saves `effective_movement` to PostgreSQL (optional)
+   - Computes bilateral `effective_gait` from movement
+   - Saves only missing gait records to PostgreSQL (idempotent)
+
+2. **`fill-gait`**: Backfill mode
+   - Reads existing `effective_movement` from PostgreSQL
+   - Identifies movement records without corresponding gait
+   - Computes `effective_gait` **only for missing entries**
+   - Saves only newly computed gait to PostgreSQL (fast, incremental)
+   - Requires `--hours-back` or `-i` for time/ID filtering
+
+Use `--mode fill-gait` to efficiently compute gait for historical effective_movement
+records that were already calculated but lack corresponding gait entries.
 
 ## Semantic note
 
