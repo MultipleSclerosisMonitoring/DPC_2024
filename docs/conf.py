@@ -38,6 +38,11 @@ autodoc_default_options = {
 autodoc_mock_imports = [
     'influxdb_client',
     'psycopg2',
+    'pandas',
+    'pydantic',
+    'pytz',
+    'scipy',
+    'sklearn',
 ]
 
 language = 'en'
@@ -54,7 +59,14 @@ html_context = {
 
 # -- Options for HTML output -------------------------------------------------
 
-html_theme = 'sphinx_rtd_theme'
+try:
+    import sphinx_rtd_theme
+    html_theme = 'sphinx_rtd_theme'
+    html_theme_path = [sphinx_rtd_theme.get_html_theme_path()]
+except Exception:
+    html_theme = 'alabaster'
+    html_theme_path = []
+
 html_static_path = ['_static']
 
 rst_epilog = """

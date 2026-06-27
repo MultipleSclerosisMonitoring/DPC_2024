@@ -39,6 +39,7 @@ if the table is extended later.
 """
 
 import argparse
+import warnings
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Any
@@ -47,6 +48,7 @@ import pandas as pd
 import psycopg2
 from influxdb_client import InfluxDBClient
 from psycopg2 import sql
+from urllib3.exceptions import InsecureRequestWarning
 
 from msTools.settings import AppConfig, get_runtime_config_path, load_app_config
 from msTools.timeutils import ensure_utc
@@ -186,12 +188,21 @@ class InfluxCodeIDInventory:
             settings: Validated repository settings.
         """
         self.settings = settings
+        verify_ssl = bool(settings.influxdb.verify)
+        if not verify_ssl:
+            # Cron-oriented runs may intentionally use a non-verified internal
+            # TLS endpoint; hide the repetitive urllib3 noise while keeping the
+            # connection behavior unchanged.
+            warnings.filterwarnings(
+                "ignore",
+                category=InsecureRequestWarning,
+            )
         self.client = InfluxDBClient(
             url=settings.influxdb.url,
             token=settings.influxdb.token,
             org=settings.influxdb.org,
             timeout=settings.influxdb.timeout,
-            verify_ssl=bool(settings.influxdb.verify),
+            verify_ssl=verify_ssl,
         )
 
     def close(self) -> None:
@@ -223,7 +234,7 @@ class InfluxCodeIDInventory:
         query_api = self.client.query_api()
 
         records_by_key: dict[tuple[str, str | None, str], InventoryRecord] = {}
-        seen_at = pd.Timestamp.utcnow().to_pydatetime()
+        seen_at = pd.Timestamp.now("UTC").to_pydatetime()
 
         for bucket, measurements in bucket_measurements.items():
             if verbose >= 1:
@@ -638,12 +649,12 @@ def resolve_time_window(args: argparse.Namespace) -> tuple[datetime, datetime]:
     if args.from_date:
         start_time = ensure_utc(args.from_date).to_pydatetime()
     else:
-        start_time = (pd.Timestamp.utcnow() - pd.Timedelta(minutes=args.lookback_minutes)).to_pydatetime()
+        start_time = (pd.Timestamp.now("UTC") - pd.Timedelta(minutes=args.lookback_minutes)).to_pydatetime()
 
     if args.until_date:
         end_time = ensure_utc(args.until_date).to_pydatetime()
     else:
-        end_time = pd.Timestamp.utcnow().to_pydatetime()
+        end_time = pd.Timestamp.now("UTC").to_pydatetime()
 
     if end_time <= start_time:
         raise ValueError(f"Invalid time window: end_time={end_time!r} must be after start_time={start_time!r}.")
