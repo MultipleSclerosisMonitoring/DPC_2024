@@ -533,13 +533,14 @@ class DataManager:
         return transformed_data[output_columns]
         
     
-    def _insert_row_returning_id(self, cursor, table_name: str, row: dict[str, Any]) -> int:
+    def _insert_row_returning_id(self, cursor, table_name: str, row: dict[str, Any], verbose: int = 0) -> int:
         """Insert one row safely into a table and return the generated ID.
 
         Args:
             cursor: Open PostgreSQL cursor.
             table_name: Destination table name.
             row: Row values to insert.
+            verbose: Verbosity level for console output.
 
         Returns:
             Inserted row ID.
@@ -555,13 +556,19 @@ class DataManager:
             fields=sql.SQL(", ").join(sql.Identifier(col) for col in column_names),
             values=sql.SQL(", ").join(sql.Placeholder() for _ in column_names),
         )
+        if verbose >= 4:
+            try:
+                query_text = query.as_string(cursor)
+            except Exception:
+                query_text = str(query)
+            print(f"[PGSQL-SQL] {query_text} params={tuple(row[col] for col in column_names)}")
         cursor.execute(query, tuple(row[col] for col in column_names))
         result = cursor.fetchone()
         if result is None:
             raise RuntimeError(f"Insert into {table_name} did not return an id.")
         return result[0]
 
-    def _find_existing_row_id(self, cursor, table_name: str, row: dict[str, Any]) -> int | None:
+    def _find_existing_row_id(self, cursor, table_name: str, row: dict[str, Any], verbose: int = 0) -> int | None:
         """Find an equivalent existing row for idempotent tables.
 
         Args:
@@ -647,8 +654,7 @@ class DataManager:
                 ),
             )
         elif table_name == "effective_gait":
-            cursor.execute(
-                """
+            query = """
                 SELECT id
                 FROM effective_gait
                 WHERE codeid_id IS NOT DISTINCT FROM %s
@@ -656,37 +662,40 @@ class DataManager:
                   AND end_time IS NOT DISTINCT FROM %s
                   AND duration IS NOT DISTINCT FROM %s
                 LIMIT 1
-                """,
-                (
-                    row["codeid_id"],
-                    row["start_time"],
-                    row["end_time"],
-                    row["duration"],
-                ),
+                """
+            params = (
+                row["codeid_id"],
+                row["start_time"],
+                row["end_time"],
+                row["duration"],
             )
+            if verbose >= 4:
+                print(f"[PGSQL-SQL] {query.strip()} params={params}")
+            cursor.execute(query, params)
         else:
             return None
 
         result = cursor.fetchone()
         return result[0] if result else None
 
-    def _upsert_like_row_returning_id(self, cursor, table_name: str, row: dict[str, Any]) -> int:
+    def _upsert_like_row_returning_id(self, cursor, table_name: str, row: dict[str, Any], verbose: int = 0) -> int:
         """Reuse an existing row ID when possible, otherwise insert a new row.
 
         Args:
             cursor: Open PostgreSQL cursor.
             table_name: Destination table name.
             row: Candidate row values.
+            verbose: Verbosity level for console output.
 
         Returns:
             Existing or newly inserted row ID.
         """
-        existing_id = self._find_existing_row_id(cursor, table_name, row)
+        existing_id = self._find_existing_row_id(cursor, table_name, row, verbose)
         if existing_id is not None:
             if table_name == "effective_gait":
-                self._update_effective_gait_row(cursor, existing_id, row)
+                self._update_effective_gait_row(cursor, existing_id, row, verbose)
             return existing_id
-        return self._insert_row_returning_id(cursor, table_name, row)
+        return self._insert_row_returning_id(cursor, table_name, row, verbose)
 
 
     def store_data(self, table_name: str, data: pd.DataFrame, verbose: int = 1) -> list[int]:
@@ -751,9 +760,9 @@ class DataManager:
             with pg_conn.cursor() as cursor:
                 for row in validated_rows:
                     if table_name in {"activity_leg", "activity_all", "effective_movement", "effective_gait"}:
-                        row_id = self._upsert_like_row_returning_id(cursor, table_name, row)
+                        row_id = self._upsert_like_row_returning_id(cursor, table_name, row, verbose)
                     else:
-                        row_id = self._insert_row_returning_id(cursor, table_name, row)
+                        row_id = self._insert_row_returning_id(cursor, table_name, row, verbose)
 
                     inserted_ids.append(row_id)
 
@@ -904,11 +913,11 @@ class DataManager:
         self,
         cursor,
         row_id: int,
-        row: dict[str, Any]
+        row: dict[str, Any],
+        verbose: int = 0
     ) -> None:
         """Update GPS enrichment fields for an existing `effective_gait` row."""
-        cursor.execute(
-            """
+        query = """
             UPDATE effective_gait
             SET gait_confidence_level = %s,
                 gps_points = %s,
@@ -917,17 +926,19 @@ class DataManager:
                 gps_avg_speed_m_s = %s,
                 gps_validated = %s
             WHERE id = %s
-            """,
-            (
-                row.get("gait_confidence_level"),
-                row.get("gps_points"),
-                row.get("gps_distance_m"),
-                row.get("gps_elapsed_sec"),
-                row.get("gps_avg_speed_m_s"),
-                row.get("gps_validated"),
-                row_id,
-            ),
+            """
+        params = (
+            row.get("gait_confidence_level"),
+            row.get("gps_points"),
+            row.get("gps_distance_m"),
+            row.get("gps_elapsed_sec"),
+            row.get("gps_avg_speed_m_s"),
+            row.get("gps_validated"),
+            row_id,
         )
+        if verbose >= 4:
+            print(f"[PGSQL-SQL] {query.strip()} params={params}")
+        cursor.execute(query, params)
 
     def get_effective_movement_by_time_range(
         self,
